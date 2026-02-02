@@ -20,7 +20,8 @@ backend/           Python backend (FastAPI)
   tests/           Pytest test suite
   data/            SQLite database files (gitignored)
   reports/         Generated HTML reports (gitignored)
-  requirements.txt
+  pyproject.toml   Poetry config and dependencies
+  poetry.lock
   pytest.ini
 
 frontend/          React frontend (Vite + TypeScript)
@@ -38,9 +39,8 @@ frontend/          React frontend (Vite + TypeScript)
 
 ```bash
 cd backend
-source .venv/bin/activate
-pip install -r requirements.txt
-python -m uvicorn app.main:app --reload --port 8000
+poetry install --no-root
+poetry run uvicorn app.main:app --reload --port 8000
 ```
 
 ### Frontend
@@ -55,8 +55,7 @@ npm run dev
 
 ```bash
 cd backend
-source .venv/bin/activate
-python -m pytest tests/ -v
+poetry run pytest tests/ -v
 ```
 
 Pytest is configured with `asyncio_mode = auto` in `pytest.ini`. Tests use `httpx.AsyncClient` for API testing.
@@ -75,7 +74,7 @@ Pytest is configured with `asyncio_mode = auto` in `pytest.ini`. Tests use `http
 
 | Layer     | Technology                          |
 |-----------|-------------------------------------|
-| Backend   | Python 3.13, FastAPI, Pydantic      |
+| Backend   | Python 3.13, FastAPI, Pydantic, Poetry |
 | Database  | SQLite (aiosqlite)                  |
 | Data      | yfinance, pandas, numpy             |
 | Charts    | Plotly (HTML reports), Recharts (frontend) |
