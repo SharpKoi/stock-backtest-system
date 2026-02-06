@@ -28,6 +28,8 @@ function StrategyEditorPage() {
   const [newFileName, setNewFileName] = useState("");
   const [showNewFileInput, setShowNewFileInput] = useState(false);
   const [fileHoverStates, setFileHoverStates] = useState<Record<string, FileItemState>>({});
+  const [editingFile, setEditingFile] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
 
   useEffect(() => {
     loadFileList();
@@ -160,6 +162,70 @@ class ${newFileName.replace(/[^a-zA-Z0-9]/g, "")}(Strategy):
     }
   };
 
+  const startRename = (filename: string) => {
+    setEditingFile(filename);
+    setEditingName(filename);
+  };
+
+  const cancelRename = () => {
+    setEditingFile(null);
+    setEditingName("");
+  };
+
+  const renameFile = async (oldFilename: string, newFilename: string) => {
+    // Validation
+    if (!newFilename.trim()) {
+      setError("Filename cannot be empty");
+      return;
+    }
+
+    if (!newFilename.endsWith(".py")) {
+      setError("Filename must end with .py");
+      return;
+    }
+
+    if (newFilename === oldFilename) {
+      cancelRename();
+      return;
+    }
+
+    // Check for duplicates
+    if (files.some((f) => f.filename === newFilename)) {
+      setError(`File ${newFilename} already exists`);
+      return;
+    }
+
+    // Validate characters (no path traversal)
+    if (newFilename.includes("..") || newFilename.includes("/") || newFilename.includes("\\")) {
+      setError("Invalid filename: cannot contain path traversal characters");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await api.post(`/strategies/files/${oldFilename}/rename`, {
+        new_filename: newFilename,
+      });
+      setMessage(`Renamed ${oldFilename} to ${newFilename} successfully`);
+      setError(null);
+
+      // Update selected file if it was the renamed one
+      if (selectedFile === oldFilename) {
+        setSelectedFile(newFilename);
+      }
+
+      cancelRename();
+      await loadFileList();
+      setTimeout(() => setMessage(null), 3000);
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { detail?: string } } };
+      setError(error.response?.data?.detail || `Failed to rename file: ${oldFilename}`);
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const hasUnsavedChanges = content !== originalContent;
 
   return (
@@ -257,6 +323,8 @@ class ${newFileName.replace(/[^a-zA-Z0-9]/g, "")}(Strategy):
           )}
           {files.map((file) => {
             const hoverState = fileHoverStates[file.filename] || { isHovered: false, deleteHovered: false };
+            const isEditing = editingFile === file.filename;
+
             return (
               <div
                 key={file.filename}
@@ -272,7 +340,6 @@ class ${newFileName.replace(/[^a-zA-Z0-9]/g, "")}(Strategy):
                     [file.filename]: { isHovered: false, deleteHovered: false },
                   }))
                 }
-                onClick={() => loadFile(file.filename)}
                 style={{
                   marginBottom: "0.25rem",
                   display: "flex",
@@ -280,7 +347,7 @@ class ${newFileName.replace(/[^a-zA-Z0-9]/g, "")}(Strategy):
                   justifyContent: "space-between",
                   padding: "0.5rem 0.75rem",
                   borderRadius: "4px",
-                  cursor: "pointer",
+                  cursor: isEditing ? "default" : "pointer",
                   backgroundColor:
                     selectedFile === file.filename
                       ? "#303842"
@@ -290,49 +357,80 @@ class ${newFileName.replace(/[^a-zA-Z0-9]/g, "")}(Strategy):
                   transition: "background-color 0.15s ease",
                 }}
               >
-                <span
-                  style={{
-                    flex: 1,
-                    fontSize: "0.875rem",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                    pointerEvents: "none",
-                  }}
-                >
-                  {file.filename}
-                </span>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    deleteFile(file.filename);
-                  }}
-                  onMouseEnter={() =>
-                    setFileHoverStates((prev) => ({
-                      ...prev,
-                      [file.filename]: { ...prev[file.filename], deleteHovered: true },
-                    }))
-                  }
-                  onMouseLeave={() =>
-                    setFileHoverStates((prev) => ({
-                      ...prev,
-                      [file.filename]: { ...prev[file.filename], deleteHovered: false },
-                    }))
-                  }
-                  style={{
-                    marginLeft: "0.5rem",
-                    padding: "0.25rem",
-                    backgroundColor: "transparent",
-                    border: "none",
-                    cursor: "pointer",
-                    color: hoverState.deleteHovered ? "#ef4444" : "#9ca3af",
-                    transition: "color 0.15s ease",
-                  }}
-                  disabled={loading}
-                  title="Delete file"
-                >
-                  <Trash2 size={16} />
-                </button>
+                {isEditing ? (
+                  <input
+                    type="text"
+                    value={editingName}
+                    onChange={(e) => setEditingName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        renameFile(file.filename, editingName);
+                      } else if (e.key === "Escape") {
+                        cancelRename();
+                      }
+                    }}
+                    onBlur={() => cancelRename()}
+                    autoFocus
+                    style={{
+                      flex: 1,
+                      fontSize: "0.875rem",
+                      padding: "0.25rem 0.5rem",
+                      border: "1px solid #3b82f6",
+                      borderRadius: "3px",
+                      outline: "none",
+                    }}
+                  />
+                ) : (
+                  <>
+                    <span
+                      onDoubleClick={(e) => {
+                        e.stopPropagation();
+                        startRename(file.filename);
+                      }}
+                      onClick={() => loadFile(file.filename)}
+                      style={{
+                        flex: 1,
+                        fontSize: "0.875rem",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {file.filename}
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteFile(file.filename);
+                      }}
+                      onMouseEnter={() =>
+                        setFileHoverStates((prev) => ({
+                          ...prev,
+                          [file.filename]: { ...prev[file.filename], deleteHovered: true },
+                        }))
+                      }
+                      onMouseLeave={() =>
+                        setFileHoverStates((prev) => ({
+                          ...prev,
+                          [file.filename]: { ...prev[file.filename], deleteHovered: false },
+                        }))
+                      }
+                      style={{
+                        marginLeft: "0.5rem",
+                        padding: "0.25rem",
+                        backgroundColor: "transparent",
+                        border: "none",
+                        cursor: "pointer",
+                        color: hoverState.deleteHovered ? "#ef4444" : "#9ca3af",
+                        transition: "color 0.15s ease",
+                      }}
+                      disabled={loading}
+                      title="Delete file"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </>
+                )}
               </div>
             );
           })}

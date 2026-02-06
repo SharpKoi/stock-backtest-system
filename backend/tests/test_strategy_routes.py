@@ -150,3 +150,115 @@ async def test_delete_nonexistent_file():
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         response = await client.delete("/api/strategies/files/nonexistent.py")
         assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_rename_strategy_file():
+    """Test renaming a strategy file."""
+    transport = ASGITransport(app=app)
+    old_filename = "rename_test_old.py"
+    new_filename = "rename_test_new.py"
+    content = "# Test content"
+
+    # Create file
+    write_strategy_file(old_filename, content)
+
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            f"/api/strategies/files/{old_filename}/rename",
+            json={"new_filename": new_filename}
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["old_filename"] == old_filename
+        assert data["new_filename"] == new_filename
+
+    # Verify old file is gone and new file exists
+    assert not (get_strategies_dir() / old_filename).exists()
+    assert (get_strategies_dir() / new_filename).exists()
+
+    # Cleanup
+    try:
+        delete_strategy_file(new_filename)
+    except FileNotFoundError:
+        pass
+
+
+@pytest.mark.asyncio
+async def test_rename_nonexistent_file():
+    """Test renaming a file that doesn't exist."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/api/strategies/files/nonexistent.py/rename",
+            json={"new_filename": "new_name.py"}
+        )
+        assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_rename_to_existing_file():
+    """Test renaming to a filename that already exists."""
+    transport = ASGITransport(app=app)
+    file1 = "rename_existing_1.py"
+    file2 = "rename_existing_2.py"
+
+    # Create both files
+    write_strategy_file(file1, "# File 1")
+    write_strategy_file(file2, "# File 2")
+
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            f"/api/strategies/files/{file1}/rename",
+            json={"new_filename": file2}
+        )
+        assert response.status_code == 409  # Conflict
+
+    # Cleanup
+    try:
+        delete_strategy_file(file1)
+        delete_strategy_file(file2)
+    except FileNotFoundError:
+        pass
+
+
+@pytest.mark.asyncio
+async def test_rename_invalid_extension():
+    """Test renaming to filename without .py extension."""
+    transport = ASGITransport(app=app)
+    filename = "rename_invalid_ext.py"
+    write_strategy_file(filename, "# Test")
+
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            f"/api/strategies/files/{filename}/rename",
+            json={"new_filename": "test.txt"}
+        )
+        assert response.status_code == 400
+
+    # Cleanup
+    try:
+        delete_strategy_file(filename)
+    except FileNotFoundError:
+        pass
+
+
+@pytest.mark.asyncio
+async def test_rename_path_traversal():
+    """Test that path traversal is blocked in rename."""
+    transport = ASGITransport(app=app)
+    filename = "rename_path_test.py"
+    write_strategy_file(filename, "# Test")
+
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            f"/api/strategies/files/{filename}/rename",
+            json={"new_filename": "../evil.py"}
+        )
+        assert response.status_code == 400
+
+    # Cleanup
+    try:
+        delete_strategy_file(filename)
+    except FileNotFoundError:
+        pass
