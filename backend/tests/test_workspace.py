@@ -13,6 +13,7 @@ from app.services.workspace import (
     initialize_workspace_with_examples,
     list_strategy_files,
     read_strategy_file,
+    rename_strategy_file,
     write_strategy_file,
 )
 
@@ -205,3 +206,65 @@ def test_initialize_workspace_handles_missing_builtin_dir(clean_workspace, tmp_p
     # Workspace should be created but empty
     assert get_workspace_dir().exists()
     assert len(list_strategy_files()) == 0
+
+
+def test_rename_strategy_file(clean_workspace):
+    """Test renaming a strategy file."""
+    old_filename = "old_name.py"
+    new_filename = "new_name.py"
+    content = "# Test strategy content"
+
+    # Create file
+    write_strategy_file(old_filename, content)
+
+    # Rename
+    new_path = rename_strategy_file(old_filename, new_filename)
+
+    # Verify old file is gone and new file exists with same content
+    assert not (get_strategies_dir() / old_filename).exists()
+    assert new_path.exists()
+    assert new_path.name == new_filename
+    assert new_path.read_text() == content
+
+
+def test_rename_strategy_file_not_found(clean_workspace):
+    """Test renaming nonexistent file raises error."""
+    with pytest.raises(FileNotFoundError, match="Strategy file not found"):
+        rename_strategy_file("nonexistent.py", "new_name.py")
+
+
+def test_rename_strategy_file_already_exists(clean_workspace):
+    """Test renaming to existing filename raises error."""
+    write_strategy_file("file1.py", "# File 1")
+    write_strategy_file("file2.py", "# File 2")
+
+    with pytest.raises(FileExistsError, match="File already exists"):
+        rename_strategy_file("file1.py", "file2.py")
+
+
+def test_rename_strategy_file_invalid_extension(clean_workspace):
+    """Test renaming to filename without .py extension fails."""
+    write_strategy_file("test.py", "# Test")
+
+    with pytest.raises(ValueError, match="must end with .py"):
+        rename_strategy_file("test.py", "test.txt")
+
+
+def test_rename_strategy_file_path_traversal_old(clean_workspace):
+    """Test that path traversal is blocked for old filename."""
+    with pytest.raises(ValueError, match="cannot contain path traversal"):
+        rename_strategy_file("../evil.py", "new.py")
+
+    with pytest.raises(ValueError, match="cannot contain path traversal"):
+        rename_strategy_file("subdir/file.py", "new.py")
+
+
+def test_rename_strategy_file_path_traversal_new(clean_workspace):
+    """Test that path traversal is blocked for new filename."""
+    write_strategy_file("test.py", "# Test")
+
+    with pytest.raises(ValueError, match="cannot contain path traversal"):
+        rename_strategy_file("test.py", "../evil.py")
+
+    with pytest.raises(ValueError, match="cannot contain path traversal"):
+        rename_strategy_file("test.py", "subdir/file.py")

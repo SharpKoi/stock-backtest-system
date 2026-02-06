@@ -165,6 +165,50 @@ def delete_strategy_file(filename: str) -> None:
     logger.info("Strategy file deleted: %s", file_path)
 
 
+def rename_strategy_file(old_filename: str, new_filename: str) -> Path:
+    """Rename a strategy file.
+
+    Args:
+        old_filename: Current name of the strategy file.
+        new_filename: New name for the strategy file.
+
+    Returns:
+        Path to the renamed file.
+
+    Raises:
+        FileNotFoundError: If the old file doesn't exist.
+        FileExistsError: If a file with the new name already exists.
+        ValueError: If either filename is invalid.
+    """
+    # Validate both filenames
+    if ".." in old_filename or "/" in old_filename or "\\" in old_filename:
+        raise ValueError("Invalid old filename: cannot contain path traversal")
+
+    if ".." in new_filename or "/" in new_filename or "\\" in new_filename:
+        raise ValueError("Invalid new filename: cannot contain path traversal")
+
+    if not new_filename.endswith(".py"):
+        raise ValueError("New filename must end with .py")
+
+    strategies_dir = get_strategies_dir()
+    old_path = strategies_dir / old_filename
+    new_path = strategies_dir / new_filename
+
+    # Check if old file exists
+    if not old_path.exists():
+        raise FileNotFoundError(f"Strategy file not found: {old_filename}")
+
+    # Check if new filename already exists
+    if new_path.exists():
+        raise FileExistsError(f"File already exists: {new_filename}")
+
+    # Rename the file
+    old_path.rename(new_path)
+    logger.info("Strategy file renamed: %s -> %s", old_filename, new_filename)
+
+    return new_path
+
+
 def get_strategy_file_path(filename: str) -> Path:
     """Get the full path to a strategy file.
 
