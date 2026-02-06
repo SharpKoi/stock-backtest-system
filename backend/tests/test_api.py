@@ -3,7 +3,15 @@
 import pytest
 from fastapi.testclient import TestClient
 
+from app.core.config import STRATEGIES_DIR
 from app.main import app
+from app.services.workspace import initialize_workspace_with_examples
+
+
+@pytest.fixture(scope="session", autouse=True)
+def setup_workspace():
+    """Initialize workspace with example strategies for all tests."""
+    initialize_workspace_with_examples(STRATEGIES_DIR)
 
 
 @pytest.fixture
