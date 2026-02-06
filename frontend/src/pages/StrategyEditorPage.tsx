@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import Editor from "@monaco-editor/react";
-import { Trash2 } from "lucide-react";
+import { Trash2, Menu, X } from "lucide-react";
 import { api } from "../services/api";
 
 interface StrategyFile {
@@ -30,9 +30,27 @@ function StrategyEditorPage() {
   const [fileHoverStates, setFileHoverStates] = useState<Record<string, FileItemState>>({});
   const [editingFile, setEditingFile] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
+  const [sidebarVisible, setSidebarVisible] = useState(true);
 
   useEffect(() => {
     loadFileList();
+  }, []);
+
+  useEffect(() => {
+    // Auto-hide sidebar on small screens
+    const handleResize = () => {
+      if (window.innerWidth < 768) {
+        setSidebarVisible(false);
+      } else {
+        setSidebarVisible(true);
+      }
+    };
+
+    // Initial check
+    handleResize();
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
   }, []);
 
   const loadFileList = async () => {
@@ -229,22 +247,27 @@ class ${newFileName.replace(/[^a-zA-Z0-9]/g, "")}(Strategy):
   const hasUnsavedChanges = content !== originalContent;
 
   return (
-    <div style={{ display: "flex", height: "100vh", flexDirection: "column" }}>
-      <div style={{ padding: "1rem", borderBottom: "1px solid #ccc" }}>
+    <div style={{ display: "flex", height: "100vh", flexDirection: "column", overflow: "hidden" }}>
+      <div style={{ padding: "1rem", borderBottom: "1px solid #ccc", flexShrink: 0 }}>
         <h1>Strategy Editor</h1>
         <p style={{ color: "#666", fontSize: "0.9rem" }}>
           Edit your trading strategies using the vici-trade-sdk
         </p>
       </div>
 
-      <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
+      <div style={{ display: "flex", flex: 1, overflow: "hidden", position: "relative" }}>
         {/* File List Sidebar */}
         <div
           style={{
-            width: "250px",
-            borderRight: "1px solid #ccc",
-            padding: "1rem",
+            width: sidebarVisible ? "250px" : "0",
+            minWidth: sidebarVisible ? "250px" : "0",
+            maxWidth: sidebarVisible ? "250px" : "0",
+            borderRight: sidebarVisible ? "1px solid #ccc" : "none",
+            padding: sidebarVisible ? "1rem" : "0",
             overflowY: "auto",
+            overflowX: "hidden",
+            transition: "all 0.3s ease",
+            flexShrink: 0,
           }}
         >
           <div style={{ marginBottom: "1rem" }}>
@@ -437,7 +460,7 @@ class ${newFileName.replace(/[^a-zA-Z0-9]/g, "")}(Strategy):
         </div>
 
         {/* Editor Area */}
-        <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden" }}>
           {/* Toolbar */}
           <div
             style={{
@@ -447,22 +470,44 @@ class ${newFileName.replace(/[^a-zA-Z0-9]/g, "")}(Strategy):
               justifyContent: "space-between",
               alignItems: "center",
               backgroundColor: "#f8f9fa",
+              flexShrink: 0,
+              gap: "0.5rem",
             }}
           >
-            <div>
-              {selectedFile ? (
-                <span
-                  style={{
-                    fontWeight: 600,
-                    color: hasUnsavedChanges ? "#ea580c" : "#111827",
-                  }}
-                >
-                  {selectedFile}
-                  {hasUnsavedChanges && "*"}
-                </span>
-              ) : (
-                <span style={{ color: "#666" }}>No file selected</span>
-              )}
+            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", minWidth: 0, flex: 1 }}>
+              <button
+                onClick={() => setSidebarVisible(!sidebarVisible)}
+                style={{
+                  padding: "0.5rem",
+                  backgroundColor: "transparent",
+                  border: "1px solid #ccc",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "#666",
+                  flexShrink: 0,
+                }}
+                title={sidebarVisible ? "Hide sidebar" : "Show sidebar"}
+              >
+                {sidebarVisible ? <X size={18} /> : <Menu size={18} />}
+              </button>
+              <div style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {selectedFile ? (
+                  <span
+                    style={{
+                      fontWeight: 600,
+                      color: hasUnsavedChanges ? "#ea580c" : "#111827",
+                    }}
+                  >
+                    {selectedFile}
+                    {hasUnsavedChanges && "*"}
+                  </span>
+                ) : (
+                  <span style={{ color: "#666" }}>No file selected</span>
+                )}
+              </div>
             </div>
             <button
               onClick={saveFile}
@@ -474,6 +519,8 @@ class ${newFileName.replace(/[^a-zA-Z0-9]/g, "")}(Strategy):
                 border: "none",
                 borderRadius: "4px",
                 cursor: hasUnsavedChanges ? "pointer" : "not-allowed",
+                flexShrink: 0,
+                whiteSpace: "nowrap",
               }}
             >
               {loading ? "Saving..." : "Save"}
@@ -507,7 +554,7 @@ class ${newFileName.replace(/[^a-zA-Z0-9]/g, "")}(Strategy):
           )}
 
           {/* Monaco Editor */}
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
             {selectedFile ? (
               <Editor
                 height="100%"
@@ -521,6 +568,7 @@ class ${newFileName.replace(/[^a-zA-Z0-9]/g, "")}(Strategy):
                   lineNumbers: "on",
                   scrollBeyondLastLine: false,
                   automaticLayout: true,
+                  wordWrap: "on",
                 }}
               />
             ) : (
