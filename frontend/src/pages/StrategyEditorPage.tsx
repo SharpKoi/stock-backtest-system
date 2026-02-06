@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import Editor from "@monaco-editor/react";
+import { Trash2 } from "lucide-react";
 import { api } from "../services/api";
 
 interface StrategyFile {
@@ -9,6 +10,11 @@ interface StrategyFile {
 interface StrategyContent {
   filename: string;
   content: string;
+}
+
+interface FileItemState {
+  isHovered: boolean;
+  deleteHovered: boolean;
 }
 
 function StrategyEditorPage() {
@@ -21,6 +27,7 @@ function StrategyEditorPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [newFileName, setNewFileName] = useState("");
   const [showNewFileInput, setShowNewFileInput] = useState(false);
+  const [fileHoverStates, setFileHoverStates] = useState<Record<string, FileItemState>>({});
 
   useEffect(() => {
     loadFileList();
@@ -248,51 +255,87 @@ class ${newFileName.replace(/[^a-zA-Z0-9]/g, "")}(Strategy):
           {files.length === 0 && !loading && (
             <p style={{ color: "#666", fontSize: "0.8rem" }}>No strategy files found</p>
           )}
-          {files.map((file) => (
-            <div
-              key={file.filename}
-              style={{
-                marginBottom: "0.5rem",
-                display: "flex",
-                alignItems: "center",
-                gap: "0.5rem",
-              }}
-            >
-              <button
+          {files.map((file) => {
+            const hoverState = fileHoverStates[file.filename] || { isHovered: false, deleteHovered: false };
+            return (
+              <div
+                key={file.filename}
+                onMouseEnter={() =>
+                  setFileHoverStates((prev) => ({
+                    ...prev,
+                    [file.filename]: { ...prev[file.filename], isHovered: true },
+                  }))
+                }
+                onMouseLeave={() =>
+                  setFileHoverStates((prev) => ({
+                    ...prev,
+                    [file.filename]: { isHovered: false, deleteHovered: false },
+                  }))
+                }
                 onClick={() => loadFile(file.filename)}
                 style={{
-                  flex: 1,
-                  padding: "0.5rem",
-                  textAlign: "left",
+                  marginBottom: "0.25rem",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "0.5rem 0.75rem",
+                  borderRadius: "4px",
+                  cursor: "pointer",
                   backgroundColor:
-                    selectedFile === file.filename ? "#e7f3ff" : "white",
-                  border: "1px solid #ccc",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontSize: "0.85rem",
+                    selectedFile === file.filename
+                      ? "#303842"
+                      : hoverState.isHovered
+                      ? "#303842"
+                      : "transparent",
+                  transition: "background-color 0.15s ease",
                 }}
-                disabled={loading}
               >
-                {file.filename}
-              </button>
-              <button
-                onClick={() => deleteFile(file.filename)}
-                style={{
-                  padding: "0.3rem 0.6rem",
-                  backgroundColor: "#dc3545",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontSize: "0.8rem",
-                }}
-                disabled={loading}
-                title="Delete file"
-              >
-                ✕
-              </button>
-            </div>
-          ))}
+                <span
+                  style={{
+                    flex: 1,
+                    fontSize: "0.875rem",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                    pointerEvents: "none",
+                  }}
+                >
+                  {file.filename}
+                </span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deleteFile(file.filename);
+                  }}
+                  onMouseEnter={() =>
+                    setFileHoverStates((prev) => ({
+                      ...prev,
+                      [file.filename]: { ...prev[file.filename], deleteHovered: true },
+                    }))
+                  }
+                  onMouseLeave={() =>
+                    setFileHoverStates((prev) => ({
+                      ...prev,
+                      [file.filename]: { ...prev[file.filename], deleteHovered: false },
+                    }))
+                  }
+                  style={{
+                    marginLeft: "0.5rem",
+                    padding: "0.25rem",
+                    backgroundColor: "transparent",
+                    border: "none",
+                    cursor: "pointer",
+                    color: hoverState.deleteHovered ? "#ef4444" : "#9ca3af",
+                    transition: "color 0.15s ease",
+                  }}
+                  disabled={loading}
+                  title="Delete file"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            );
+          })}
         </div>
 
         {/* Editor Area */}
@@ -310,11 +353,14 @@ class ${newFileName.replace(/[^a-zA-Z0-9]/g, "")}(Strategy):
           >
             <div>
               {selectedFile ? (
-                <span style={{ fontWeight: "bold" }}>
+                <span
+                  style={{
+                    fontWeight: 600,
+                    color: hasUnsavedChanges ? "#ea580c" : "#111827",
+                  }}
+                >
                   {selectedFile}
-                  {hasUnsavedChanges && (
-                    <span style={{ color: "#dc3545" }}> (unsaved)</span>
-                  )}
+                  {hasUnsavedChanges && "*"}
                 </span>
               ) : (
                 <span style={{ color: "#666" }}>No file selected</span>
