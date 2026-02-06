@@ -1,0 +1,183 @@
+"""User workspace directory management.
+
+Manages the ~/.vici-backtest/strategies/ directory where users store
+their custom trading strategies.
+"""
+
+import logging
+import shutil
+from pathlib import Path
+
+logger = logging.getLogger(__name__)
+
+
+def get_workspace_dir() -> Path:
+    """Get the user workspace directory path.
+
+    Returns:
+        Path to ~/.vici-backtest directory.
+    """
+    return Path.home() / ".vici-backtest"
+
+
+def get_strategies_dir() -> Path:
+    """Get the strategies directory path.
+
+    Returns:
+        Path to ~/.vici-backtest/strategies directory.
+    """
+    return get_workspace_dir() / "strategies"
+
+
+def ensure_workspace_exists() -> None:
+    """Create the workspace directory structure if it doesn't exist.
+
+    Creates:
+        - ~/.vici-backtest/
+        - ~/.vici-backtest/strategies/
+    """
+    workspace = get_workspace_dir()
+    strategies = get_strategies_dir()
+
+    workspace.mkdir(parents=True, exist_ok=True)
+    strategies.mkdir(parents=True, exist_ok=True)
+
+    logger.info("Workspace directory ready: %s", workspace)
+
+
+def initialize_workspace_with_examples(builtin_strategies_dir: Path) -> None:
+    """Copy built-in example strategies to user workspace if empty.
+
+    Args:
+        builtin_strategies_dir: Path to backend/strategies/ directory.
+    """
+    ensure_workspace_exists()
+    strategies_dir = get_strategies_dir()
+
+    # Check if workspace already has strategies
+    existing_files = list(strategies_dir.glob("*.py"))
+    if existing_files:
+        logger.info("User workspace already has strategies, skipping initialization")
+        return
+
+    # Copy example strategies from codebase to workspace
+    if not builtin_strategies_dir.exists():
+        logger.warning("Built-in strategies directory not found: %s", builtin_strategies_dir)
+        return
+
+    copied_count = 0
+    for py_file in builtin_strategies_dir.glob("*.py"):
+        if py_file.name.startswith("_"):
+            continue
+
+        dest = strategies_dir / py_file.name
+        shutil.copy2(py_file, dest)
+        copied_count += 1
+        logger.info("Copied example strategy: %s", py_file.name)
+
+    logger.info("Initialized workspace with %d example strategies", copied_count)
+
+
+def list_strategy_files() -> list[Path]:
+    """List all Python files in the strategies directory.
+
+    Returns:
+        List of Path objects for .py files in the strategies directory.
+    """
+    strategies_dir = get_strategies_dir()
+    if not strategies_dir.exists():
+        return []
+
+    return sorted(
+        path for path in strategies_dir.glob("*.py")
+        if not path.name.startswith("_")
+    )
+
+
+def read_strategy_file(filename: str) -> str:
+    """Read the contents of a strategy file.
+
+    Args:
+        filename: Name of the strategy file (e.g., "my_strategy.py").
+
+    Returns:
+        File contents as a string.
+
+    Raises:
+        FileNotFoundError: If the file doesn't exist.
+        ValueError: If filename tries to escape the strategies directory.
+    """
+    if ".." in filename or "/" in filename or "\\" in filename:
+        raise ValueError("Invalid filename: cannot contain path traversal")
+
+    file_path = get_strategies_dir() / filename
+    if not file_path.exists():
+        raise FileNotFoundError(f"Strategy file not found: {filename}")
+
+    return file_path.read_text(encoding="utf-8")
+
+
+def write_strategy_file(filename: str, content: str) -> Path:
+    """Write or update a strategy file.
+
+    Args:
+        filename: Name of the strategy file (e.g., "my_strategy.py").
+        content: Python code content.
+
+    Returns:
+        Path to the created/updated file.
+
+    Raises:
+        ValueError: If filename is invalid or doesn't end with .py.
+    """
+    if not filename.endswith(".py"):
+        raise ValueError("Filename must end with .py")
+
+    if ".." in filename or "/" in filename or "\\" in filename:
+        raise ValueError("Invalid filename: cannot contain path traversal")
+
+    ensure_workspace_exists()
+    file_path = get_strategies_dir() / filename
+    file_path.write_text(content, encoding="utf-8")
+
+    logger.info("Strategy file written: %s", file_path)
+    return file_path
+
+
+def delete_strategy_file(filename: str) -> None:
+    """Delete a strategy file.
+
+    Args:
+        filename: Name of the strategy file (e.g., "my_strategy.py").
+
+    Raises:
+        FileNotFoundError: If the file doesn't exist.
+        ValueError: If filename tries to escape the strategies directory.
+    """
+    if ".." in filename or "/" in filename or "\\" in filename:
+        raise ValueError("Invalid filename: cannot contain path traversal")
+
+    file_path = get_strategies_dir() / filename
+    if not file_path.exists():
+        raise FileNotFoundError(f"Strategy file not found: {filename}")
+
+    file_path.unlink()
+    logger.info("Strategy file deleted: %s", file_path)
+
+
+def get_strategy_file_path(filename: str) -> Path:
+    """Get the full path to a strategy file.
+
+    Args:
+        filename: Name of the strategy file (e.g., "my_strategy.py").
+
+    Returns:
+        Path object for the strategy file.
+
+    Raises:
+        ValueError: If filename tries to escape the strategies directory.
+    """
+    if ".." in filename or "/" in filename or "\\" in filename:
+        raise ValueError("Invalid filename: cannot contain path traversal")
+
+    return get_strategies_dir() / filename

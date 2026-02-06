@@ -12,8 +12,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.backtest_routes import router as backtest_router
 from app.api.data_routes import router as data_router
 from app.api.strategy_routes import router as strategy_router
-from app.core.config import CORS_ORIGINS
+from app.core.config import CORS_ORIGINS, STRATEGIES_DIR
 from app.core.database import initialize_database
+from app.services.workspace import initialize_workspace_with_examples
 
 logging.basicConfig(
     level=logging.INFO,
@@ -28,6 +29,11 @@ async def lifespan(application: FastAPI):
     """Application lifespan handler for startup and shutdown."""
     initialize_database()
     logger.info("Database initialized")
+
+    # Initialize user workspace with example strategies
+    initialize_workspace_with_examples(STRATEGIES_DIR)
+    logger.info("User workspace initialized")
+
     yield
 
 
