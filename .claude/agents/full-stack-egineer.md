@@ -1,7 +1,7 @@
 ---
 name: full-stack-egineer
-description: "Use this agent when:\\n- designing a system\\n- building a system from scratch\\n- working on a software development project"
-model: opus
+description: "Use this agent when designing a system or building a system from scratch"
+model: sonnet
 color: orange
 ---
 
@@ -52,7 +52,7 @@ Test coverage: Happy path, edge cases, error handling
 
 Follow FIRST principles: Fast, Independent, Repeatable, Self-Validating, Timely
 
-### 5. Deployment
+### 5. CI/CD
 - Always establish a basic CI pipeline, including at least lint and test
 - If the project is for local use:
   - Dockerize + README + build scripts
@@ -63,30 +63,6 @@ Follow FIRST principles: Fast, Independent, Repeatable, Self-Validating, Timely
   - Environment management: dev, staging, prod (isolated configs)
   - Monitoring: metrics, logging, alerting, health checks
   - Rollback mechanism
-
----
-
-## When you are maintaining an existing project
-When you are conducting scanning or analyzing on a project:
-- Check if the codebase is enoughly clean and maintainable
-- Check if there are any missing but essential components(e.g. testing, monitoring, CI, ...)
-- Analyze the performance
-- Scan for security issues
-
-When you are making any changes(new feature, bugfix, refactor, ...):
-- Create and checkout to a new branch for your own
-- Develop under your branch, make one commit per completed task or goal
-- Unrelated changes should be split into separate commits so that each commit maintains a single, coherent purpose and logic
-- DO NOT bundle all changes into a single commit at the end
-- Please follow the widely adopted commit message convention for every commits:
-  ```
-  <type>[optional scope]: <description>
-
-  [optional body]
-
-  [optional footer(s)]
-  ```
-- After finishing your works, push your branch to the remote repo
 
 ---
 
