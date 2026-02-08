@@ -7,34 +7,14 @@ All indicator functions accept a pandas Series or DataFrame and return a
 Series or DataFrame with the computed values.
 """
 
-from abc import ABC, abstractmethod
+import inspect
+from typing import Callable
 
 import numpy as np
 import pandas as pd
 
-# ── Base Class for Custom Indicators ──
-
-class Indicator(ABC):
-    """Base class for user-defined custom indicators.
-
-    Subclass this and implement compute() to create a custom indicator.
-    """
-
-    @property
-    @abstractmethod
-    def name(self) -> str:
-        """Return the indicator name used as a column label."""
-
-    @abstractmethod
-    def compute(self, df: pd.DataFrame) -> pd.Series:
-        """Compute the indicator from OHLCV data.
-
-        Args:
-            df: DataFrame with columns: open, high, low, close, volume.
-
-        Returns:
-            A pandas Series with the indicator values, same index as df.
-        """
+# Import Indicator base class from SDK for backward compatibility
+from vici_trade_sdk import Indicator
 
 
 # ── Built-in Indicator Functions ──
@@ -222,10 +202,44 @@ BUILTIN_INDICATORS = {
 }
 
 
+# ── Custom Indicator Registry ──
+
+# Module-level registry for custom indicators loaded from user workspace
+CUSTOM_INDICATORS: dict[str, type[Indicator]] = {}
+
+
+def register_custom_indicator(name: str, indicator_cls: type[Indicator]) -> None:
+    """Register a custom indicator class in the global registry.
+
+    Args:
+        name: Identifier for the indicator (typically the class name).
+        indicator_cls: The Indicator subclass to register.
+    """
+    CUSTOM_INDICATORS[name] = indicator_cls
+
+
+def get_indicator_registry() -> dict[str, type[Indicator] | Callable]:
+    """Get unified registry of all available indicators.
+
+    Returns a dictionary containing both built-in indicator functions and
+    custom indicator classes. Built-in indicators take priority over custom
+    indicators with the same name.
+
+    Returns:
+        Dict mapping indicator name to either a function (built-in) or class (custom).
+    """
+    registry = BUILTIN_INDICATORS.copy()  # Functions
+    for name, cls in CUSTOM_INDICATORS.items():
+        if name not in registry:
+            registry[name] = cls
+    return registry
+
+
 def compute_indicators(df: pd.DataFrame,
                        indicator_configs: list[dict]) -> pd.DataFrame:
     """Compute multiple indicators and merge them into the DataFrame.
 
+    Supports both built-in indicators (functions) and custom indicators (classes).
     Each config dict specifies an indicator and its parameters.
     Example config: {"name": "sma", "params": {"period": 20}, "column": "close"}
 
@@ -237,34 +251,46 @@ def compute_indicators(df: pd.DataFrame,
         New DataFrame with original columns plus computed indicator columns.
     """
     result = df.copy()
+    registry = get_indicator_registry()  # Get unified registry
 
     for config in indicator_configs:
         ind_name = config["name"]
         params = config.get("params", {})
-        source_column = config.get("column", "close")
 
-        if ind_name not in BUILTIN_INDICATORS:
+        if ind_name not in registry:
             raise ValueError(f"Unknown indicator: '{ind_name}'")
 
-        func = BUILTIN_INDICATORS[ind_name]
+        indicator_obj = registry[ind_name]
 
-        # Indicators that need full OHLCV DataFrame
-        if ind_name in ("atr", "stochastic_oscillator", "vwap"):
-            output = func(result, **params)
-        # MACD and Bollinger Bands return DataFrames
-        elif ind_name in ("macd", "bollinger_bands"):
-            output = func(result[source_column], **params)
+        # Check if custom indicator class or built-in function
+        if inspect.isclass(indicator_obj):
+            # Custom indicator: instantiate and call compute()
+            instance = indicator_obj(**params)
+            output = instance.compute(result)
+            col_name = instance.name
         else:
-            output = func(result[source_column], **params)
+            # Built-in function: existing logic
+            source_column = config.get("column", "close")
+            func = indicator_obj
+
+            # Indicators that need full OHLCV DataFrame
+            if ind_name in ("atr", "stochastic_oscillator", "vwap"):
+                output = func(result, **params)
+            # MACD and Bollinger Bands return DataFrames
+            elif ind_name in ("macd", "bollinger_bands"):
+                output = func(result[source_column], **params)
+            else:
+                output = func(result[source_column], **params)
+
+            # Name the column: indicator_param (e.g., sma_20)
+            param_suffix = "_".join(str(v) for v in params.values())
+            col_name = f"{ind_name}_{param_suffix}" if param_suffix else ind_name
 
         # Merge output into result
         if isinstance(output, pd.DataFrame):
             for col in output.columns:
                 result[col] = output[col]
         else:
-            # Name the column: indicator_param (e.g., sma_20)
-            param_suffix = "_".join(str(v) for v in params.values())
-            col_name = f"{ind_name}_{param_suffix}" if param_suffix else ind_name
             result[col_name] = output
 
     return result
