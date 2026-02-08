@@ -4,6 +4,7 @@ import BacktestPage from "./pages/BacktestPage";
 import ResultsPage from "./pages/ResultsPage";
 import ResultDetailPage from "./pages/ResultDetailPage";
 import StrategyEditorPage from "./pages/StrategyEditorPage";
+import IndicatorEditorPage from "./pages/IndicatorEditorPage";
 
 function App() {
   return (
@@ -30,6 +31,14 @@ function App() {
           </li>
           <li>
             <NavLink
+              to="/indicators"
+              className={({ isActive }) => (isActive ? "active" : "")}
+            >
+              Indicator Editor
+            </NavLink>
+          </li>
+          <li>
+            <NavLink
               to="/backtest"
               className={({ isActive }) => (isActive ? "active" : "")}
             >
@@ -50,6 +59,7 @@ function App() {
         <Routes>
           <Route path="/" element={<DataPage />} />
           <Route path="/strategies" element={<StrategyEditorPage />} />
+          <Route path="/indicators" element={<IndicatorEditorPage />} />
           <Route path="/backtest" element={<BacktestPage />} />
           <Route path="/results" element={<ResultsPage />} />
           <Route path="/results/:id" element={<ResultDetailPage />} />
