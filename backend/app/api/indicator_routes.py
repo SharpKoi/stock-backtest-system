@@ -4,7 +4,11 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from app.services.indicator_loader import discover_indicators, list_indicator_info
-from app.services.indicators import BUILTIN_INDICATORS, register_custom_indicator
+from app.services.indicators import (
+    BUILTIN_INDICATORS,
+    get_builtin_indicator_source,
+    register_custom_indicator,
+)
 from app.services.workspace import (
     delete_indicator_file,
     list_indicator_files,
@@ -72,6 +76,28 @@ def list_indicator_file_names():
     """List all indicator file names in the workspace."""
     files = list_indicator_files()
     return [{"filename": f.name} for f in files]
+
+
+@router.get("/builtin/{indicator_name}/source")
+def get_builtin_indicator_source_endpoint(indicator_name: str):
+    """Get source code of a built-in indicator.
+
+    Args:
+        indicator_name: Name of the built-in indicator (e.g., 'sma', 'ema', 'rsi').
+
+    Returns:
+        Source code of the indicator function.
+
+    Raises:
+        404: If indicator not found or source unavailable.
+    """
+    source = get_builtin_indicator_source(indicator_name)
+    if source is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Built-in indicator not found or source unavailable: {indicator_name}"
+        )
+    return {"indicator_name": indicator_name, "source": source}
 
 
 @router.get("/files/{filename}")

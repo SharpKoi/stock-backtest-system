@@ -235,6 +235,25 @@ def get_indicator_registry() -> dict[str, type[Indicator] | Callable]:
     return registry
 
 
+def get_builtin_indicator_source(indicator_name: str) -> str | None:
+    """Get source code of a built-in indicator function.
+
+    Args:
+        indicator_name: Name of the built-in indicator.
+
+    Returns:
+        Source code as string, or None if indicator not found.
+    """
+    if indicator_name not in BUILTIN_INDICATORS:
+        return None
+
+    func = BUILTIN_INDICATORS[indicator_name]
+    try:
+        return inspect.getsource(func)
+    except Exception:
+        return None
+
+
 def compute_indicators(df: pd.DataFrame,
                        indicator_configs: list[dict]) -> pd.DataFrame:
     """Compute multiple indicators and merge them into the DataFrame.
