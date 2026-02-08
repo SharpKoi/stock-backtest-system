@@ -1566,6 +1566,7 @@ files = []
 develop = false
 
 [package.dependencies]
+numpy = "^2.2.0"
 pandas = "^3.0.0"
 
 [package.source]
