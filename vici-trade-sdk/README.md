@@ -4,9 +4,10 @@ A Python SDK for building custom trading strategies in the Vici Stock Backtestin
 
 ## Overview
 
-The Vici Trade SDK provides the essential building blocks for creating backtesting strategies:
+The Vici Trade SDK provides the essential building blocks for creating backtesting strategies and custom technical indicators:
 
 - **Strategy**: Base class for implementing trading logic
+- **Indicator**: Base class for implementing custom technical indicators
 - **Portfolio**: Interface for managing positions and executing trades
 - **Position**: Representation of an open position
 - **Trade**: Record of an executed trade
@@ -212,7 +213,130 @@ class RSIMeanReversion(Strategy):
                              data[symbol]["close"], date)
 ```
 
-## Available Indicators
+## Custom Indicators
+
+You can create custom technical indicators by inheriting from the `Indicator` base class:
+
+```python
+from vici_trade_sdk import Indicator
+import pandas as pd
+import numpy as np
+
+class WilliamsR(Indicator):
+    """Williams %R momentum indicator."""
+
+    def __init__(self, period: int = 14):
+        self.period = period
+
+    @property
+    def name(self) -> str:
+        """Return the indicator name for the output column."""
+        return f"williams_r_{self.period}"
+
+    def compute(self, df: pd.DataFrame) -> pd.Series:
+        """Compute Williams %R from OHLCV data.
+
+        Args:
+            df: DataFrame with columns: open, high, low, close, volume
+
+        Returns:
+            Series with indicator values (same index as input)
+        """
+        highest_high = df['high'].rolling(window=self.period).max()
+        lowest_low = df['low'].rolling(window=self.period).min()
+        return -100 * (highest_high - df['close']) / (highest_high - lowest_low)
+```
+
+### Indicator Storage
+
+Custom indicators are stored in the user workspace directory at:
+
+```
+~/.vici-backtest/indicators/
+```
+
+Each indicator file should:
+
+1. Import `Indicator` from `vici_trade_sdk`
+2. Define a class inheriting from `Indicator`
+3. Implement the `name` property and `compute()` method
+
+The backend system will automatically discover and load all valid indicator files from this directory.
+
+### Using Custom Indicators in Strategies
+
+Reference your custom indicators by name in the strategy's `indicators()` method:
+
+```python
+from vici_trade_sdk import Strategy, Portfolio
+import pandas as pd
+
+class CustomIndicatorStrategy(Strategy):
+    @property
+    def name(self) -> str:
+        return "Williams %R Strategy"
+
+    def indicators(self) -> list[dict]:
+        return [
+            # Custom indicator
+            {"name": "williams_r_14", "params": {"period": 14}},
+            # Built-in indicator
+            {"name": "sma", "params": {"period": 50}},
+        ]
+
+    def on_bar(self, date: str, data: dict[str, pd.Series],
+               portfolio: Portfolio) -> None:
+        for symbol in data:
+            williams_r = data[symbol]["williams_r_14"]
+            sma = data[symbol]["sma_50"]
+
+            # Buy when Williams %R is oversold (< -80)
+            if williams_r < -80 and data[symbol]["close"] > sma:
+                portfolio.buy(symbol, 100, data[symbol]["close"], date)
+```
+
+### Example Custom Indicators
+
+#### Pivot Points
+
+```python
+from vici_trade_sdk import Indicator
+import pandas as pd
+
+class PivotPoints(Indicator):
+    """Classic Pivot Points support/resistance levels."""
+
+    @property
+    def name(self) -> str:
+        return "pivot_point"
+
+    def compute(self, df: pd.DataFrame) -> pd.Series:
+        """Calculate pivot point: (High + Low + Close) / 3"""
+        return (df['high'] + df['low'] + df['close']) / 3
+```
+
+#### On-Balance Volume
+
+```python
+from vici_trade_sdk import Indicator
+import pandas as pd
+import numpy as np
+
+class OnBalanceVolume(Indicator):
+    """On-Balance Volume (OBV) indicator."""
+
+    @property
+    def name(self) -> str:
+        return "obv"
+
+    def compute(self, df: pd.DataFrame) -> pd.Series:
+        """Compute cumulative volume flow."""
+        price_direction = np.sign(df['close'].diff())
+        volume_flow = price_direction * df['volume']
+        return volume_flow.cumsum()
+```
+
+## Available Built-in Indicators
 
 The backend system provides built-in indicators that can be referenced in `indicators()`:
 
@@ -224,8 +348,14 @@ The backend system provides built-in indicators that can be referenced in `indic
   - Parameters: `period` (int)
 - **macd**: Moving Average Convergence Divergence
   - Parameters: `fast_period` (int), `slow_period` (int), `signal_period` (int)
-- **bbands**: Bollinger Bands
+- **bollinger_bands**: Bollinger Bands
   - Parameters: `period` (int), `std_dev` (float)
+- **atr**: Average True Range
+  - Parameters: `period` (int)
+- **stochastic_oscillator**: Stochastic Oscillator
+  - Parameters: `k_period` (int), `d_period` (int)
+- **vwap**: Volume Weighted Average Price
+  - No parameters required
 
 ## Development
 
