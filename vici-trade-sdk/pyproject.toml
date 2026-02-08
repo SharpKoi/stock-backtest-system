@@ -9,6 +9,7 @@ packages = [{include = "vici_trade_sdk"}]
 [tool.poetry.dependencies]
 python = "^3.13"
 pandas = "^3.0.0"
+numpy = "^2.2.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^9.0.0"
