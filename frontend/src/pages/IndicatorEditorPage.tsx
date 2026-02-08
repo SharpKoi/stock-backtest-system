@@ -12,6 +12,12 @@ interface IndicatorContent {
   content: string;
 }
 
+interface BuiltinIndicator {
+  name: string;
+  type: string;
+  docstring: string;
+}
+
 interface FileItemState {
   isHovered: boolean;
   deleteHovered: boolean;
@@ -19,7 +25,9 @@ interface FileItemState {
 
 function IndicatorEditorPage() {
   const [files, setFiles] = useState<IndicatorFile[]>([]);
+  const [builtinIndicators, setBuiltinIndicators] = useState<BuiltinIndicator[]>([]);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
+  const [selectedBuiltin, setSelectedBuiltin] = useState<string | null>(null);
   const [content, setContent] = useState<string>("");
   const [originalContent, setOriginalContent] = useState<string>("");
   const [loading, setLoading] = useState(false);
@@ -31,9 +39,11 @@ function IndicatorEditorPage() {
   const [editingFile, setEditingFile] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [sidebarVisible, setSidebarVisible] = useState(true);
+  const [isReadOnly, setIsReadOnly] = useState(false);
 
   useEffect(() => {
     loadFileList();
+    loadBuiltinIndicators();
   }, []);
 
   useEffect(() => {
@@ -67,6 +77,37 @@ function IndicatorEditorPage() {
     }
   };
 
+  const loadBuiltinIndicators = async () => {
+    try {
+      const response = await api.get<Array<{ name: string; type: string; docstring: string }>>("/indicators");
+      const builtins = response.data.filter((ind) => ind.type === "builtin");
+      setBuiltinIndicators(builtins);
+    } catch (err) {
+      console.error("Failed to load built-in indicators:", err);
+    }
+  };
+
+  const loadBuiltinIndicatorSource = async (indicatorName: string) => {
+    try {
+      setLoading(true);
+      const response = await api.get<{ indicator_name: string; source: string }>(
+        `/indicators/builtin/${indicatorName}/source`
+      );
+      setContent(response.data.source);
+      setOriginalContent(response.data.source);
+      setSelectedFile(null);
+      setSelectedBuiltin(indicatorName);
+      setIsReadOnly(true);
+      setError(null);
+      setMessage(null);
+    } catch (err) {
+      setError(`Failed to load built-in indicator: ${indicatorName}`);
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const loadFile = async (filename: string) => {
     try {
       setLoading(true);
@@ -74,6 +115,8 @@ function IndicatorEditorPage() {
       setContent(response.data.content);
       setOriginalContent(response.data.content);
       setSelectedFile(filename);
+      setSelectedBuiltin(null);
+      setIsReadOnly(false);
       setError(null);
       setMessage(null);
     } catch (err) {
@@ -461,6 +504,44 @@ class ${newFileName.replace(/[^a-zA-Z0-9]/g, "")}(Indicator):
               </div>
             );
           })}
+
+          {/* Built-in Indicators Section */}
+          <div style={{ marginTop: "1.5rem" }}>
+            <h3 style={{ fontSize: "0.9rem", marginBottom: "0.5rem", color: "#666" }}>
+              Built-in Indicators
+            </h3>
+            {builtinIndicators.length === 0 && !loading && (
+              <p style={{ color: "#999", fontSize: "0.8rem" }}>Loading...</p>
+            )}
+            {builtinIndicators.map((indicator) => (
+              <div
+                key={indicator.name}
+                onClick={() => loadBuiltinIndicatorSource(indicator.name)}
+                style={{
+                  marginBottom: "0.25rem",
+                  padding: "0.5rem 0.75rem",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  backgroundColor: selectedBuiltin === indicator.name ? "#303842" : "transparent",
+                  transition: "background-color 0.15s ease",
+                  fontSize: "0.875rem",
+                }}
+                onMouseEnter={(e) => {
+                  if (selectedBuiltin !== indicator.name) {
+                    e.currentTarget.style.backgroundColor = "#303842";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (selectedBuiltin !== indicator.name) {
+                    e.currentTarget.style.backgroundColor = "transparent";
+                  }
+                }}
+                title={indicator.docstring}
+              >
+                <span style={{ color: "#8b9dc3" }}>📚 {indicator.name}</span>
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Editor Area */}
@@ -508,6 +589,10 @@ class ${newFileName.replace(/[^a-zA-Z0-9]/g, "")}(Indicator):
                     {selectedFile}
                     {hasUnsavedChanges && "*"}
                   </span>
+                ) : selectedBuiltin ? (
+                  <span style={{ fontWeight: 600, color: "#8b9dc3" }}>
+                    📚 {selectedBuiltin} (read-only)
+                  </span>
                 ) : (
                   <span style={{ color: "#666" }}>No file selected</span>
                 )}
@@ -515,14 +600,14 @@ class ${newFileName.replace(/[^a-zA-Z0-9]/g, "")}(Indicator):
             </div>
             <button
               onClick={saveFile}
-              disabled={!selectedFile || !hasUnsavedChanges || loading}
+              disabled={!selectedFile || !hasUnsavedChanges || loading || isReadOnly}
               style={{
                 padding: "0.5rem 1rem",
-                backgroundColor: hasUnsavedChanges ? "#28a745" : "#6c757d",
+                backgroundColor: hasUnsavedChanges && !isReadOnly ? "#28a745" : "#6c757d",
                 color: "white",
                 border: "none",
                 borderRadius: "4px",
-                cursor: hasUnsavedChanges ? "pointer" : "not-allowed",
+                cursor: hasUnsavedChanges && !isReadOnly ? "pointer" : "not-allowed",
                 flexShrink: 0,
                 whiteSpace: "nowrap",
               }}
@@ -559,7 +644,7 @@ class ${newFileName.replace(/[^a-zA-Z0-9]/g, "")}(Indicator):
 
           {/* Monaco Editor */}
           <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
-            {selectedFile ? (
+            {selectedFile || selectedBuiltin ? (
               <Editor
                 height="100%"
                 defaultLanguage="python"
@@ -573,6 +658,7 @@ class ${newFileName.replace(/[^a-zA-Z0-9]/g, "")}(Indicator):
                   scrollBeyondLastLine: false,
                   automaticLayout: true,
                   wordWrap: "on",
+                  readOnly: isReadOnly,
                 }}
               />
             ) : (
