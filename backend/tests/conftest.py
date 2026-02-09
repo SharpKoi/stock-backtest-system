@@ -6,25 +6,57 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
+import pytest_asyncio
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
-from app.core.database import initialize_database
-from app.services.data_manager import DataManager
+from app.db import Base
+from app.services.data_manager_async import DataManager
 
 
 @pytest.fixture
 def tmp_db_path():
-    """Create a temporary database file for testing."""
+    """Create a temporary database file path for testing."""
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
         path = Path(f.name)
-    initialize_database(path)
     yield path
     path.unlink(missing_ok=True)
 
 
-@pytest.fixture
-def data_manager(tmp_db_path):
-    """Create a DataManager with a temporary database."""
-    return DataManager(tmp_db_path)
+@pytest_asyncio.fixture
+async def async_db_session(tmp_db_path):
+    """Create an async database session for testing."""
+    # Use in-memory SQLite for faster tests
+    database_url = f"sqlite+aiosqlite:///{tmp_db_path}"
+
+    engine = create_async_engine(
+        database_url,
+        echo=False,
+        poolclass=StaticPool,  # Use static pool for testing
+    )
+
+    # Create tables
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+        # Enable foreign keys for SQLite
+        await conn.execute(text("PRAGMA foreign_keys=ON"))
+
+    # Create session factory
+    async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+    async with async_session() as session:
+        yield session
+
+    # Cleanup
+    await engine.dispose()
+
+
+@pytest_asyncio.fixture
+async def data_manager(async_db_session):
+    """Create a DataManager with a temporary async database session."""
+    return DataManager(async_db_session)
 
 
 @pytest.fixture
@@ -41,11 +73,11 @@ def sample_ohlcv():
     close = np.array(prices)
     return pd.DataFrame(
         {
-            "open": close * (1 + np.random.randn(200) * 0.005),
-            "high": close * (1 + np.abs(np.random.randn(200) * 0.01)),
-            "low": close * (1 - np.abs(np.random.randn(200) * 0.01)),
-            "close": close,
-            "volume": np.random.randint(100000, 2000000, 200),
+            "Open": close * (1 + np.random.randn(200) * 0.005),
+            "High": close * (1 + np.abs(np.random.randn(200) * 0.01)),
+            "Low": close * (1 - np.abs(np.random.randn(200) * 0.01)),
+            "Close": close,
+            "Volume": np.random.randint(100000, 2000000, 200),
         },
         index=dates,
     )

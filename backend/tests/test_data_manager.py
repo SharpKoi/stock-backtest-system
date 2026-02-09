@@ -2,49 +2,56 @@
 
 import pytest
 
-from app.services.data_manager import DataManager
+from app.services.data_manager_async import DataManager
 
 
 class TestStockMetadata:
     """Tests for stock metadata CRUD operations."""
 
-    def test_get_or_create_stock_creates_new(self, data_manager: DataManager):
-        stock_id = data_manager.get_or_create_stock("AAPL", name="Apple Inc.")
+    @pytest.mark.asyncio
+    async def test_get_or_create_stock_creates_new(self, data_manager: DataManager):
+        stock_id = await data_manager.get_or_create_stock("AAPL", name="Apple Inc.")
         assert stock_id > 0
 
-    def test_get_or_create_stock_returns_existing(self, data_manager: DataManager):
-        id1 = data_manager.get_or_create_stock("AAPL")
-        id2 = data_manager.get_or_create_stock("AAPL")
+    @pytest.mark.asyncio
+    async def test_get_or_create_stock_returns_existing(self, data_manager: DataManager):
+        id1 = await data_manager.get_or_create_stock("AAPL")
+        id2 = await data_manager.get_or_create_stock("AAPL")
         assert id1 == id2
 
-    def test_symbol_is_uppercased(self, data_manager: DataManager):
-        id1 = data_manager.get_or_create_stock("aapl")
-        id2 = data_manager.get_or_create_stock("AAPL")
+    @pytest.mark.asyncio
+    async def test_symbol_is_uppercased(self, data_manager: DataManager):
+        id1 = await data_manager.get_or_create_stock("aapl")
+        id2 = await data_manager.get_or_create_stock("AAPL")
         assert id1 == id2
 
-    def test_list_stocks_empty(self, data_manager: DataManager):
-        stocks = data_manager.list_stocks()
+    @pytest.mark.asyncio
+    async def test_list_stocks_empty(self, data_manager: DataManager):
+        stocks = await data_manager.list_stocks()
         assert stocks == []
 
-    def test_list_stocks_after_create(self, data_manager: DataManager):
-        data_manager.get_or_create_stock("AAPL", name="Apple Inc.")
-        data_manager.get_or_create_stock("GOOGL", name="Alphabet Inc.")
-        stocks = data_manager.list_stocks()
+    @pytest.mark.asyncio
+    async def test_list_stocks_after_create(self, data_manager: DataManager):
+        await data_manager.get_or_create_stock("AAPL", name="Apple Inc.")
+        await data_manager.get_or_create_stock("GOOGL", name="Alphabet Inc.")
+        stocks = await data_manager.list_stocks()
         assert len(stocks) == 2
         symbols = [s.symbol for s in stocks]
         assert "AAPL" in symbols
         assert "GOOGL" in symbols
 
-    def test_get_stock_info(self, data_manager: DataManager):
-        data_manager.get_or_create_stock("TSLA", name="Tesla", sector="Technology")
-        info = data_manager.get_stock_info("TSLA")
+    @pytest.mark.asyncio
+    async def test_get_stock_info(self, data_manager: DataManager):
+        await data_manager.get_or_create_stock("TSLA", name="Tesla", sector="Technology")
+        info = await data_manager.get_stock_info("TSLA")
         assert info is not None
         assert info.symbol == "TSLA"
         assert info.name == "Tesla"
         assert info.sector == "Technology"
 
-    def test_get_stock_info_not_found(self, data_manager: DataManager):
-        info = data_manager.get_stock_info("NONEXISTENT")
+    @pytest.mark.asyncio
+    async def test_get_stock_info_not_found(self, data_manager: DataManager):
+        info = await data_manager.get_stock_info("NONEXISTENT")
         assert info is None
 
 
