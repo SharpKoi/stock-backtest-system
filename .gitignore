@@ -27,9 +27,6 @@ env/
 *.db
 *.sqlite3
 
-# Reports output
-backend/reports/*.html
-
 # Node
 node_modules/
 frontend/dist/

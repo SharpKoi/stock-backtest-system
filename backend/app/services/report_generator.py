@@ -7,9 +7,9 @@ Produces two types of output:
 
 
 
-from app.core.config import REPORTS_DIR
 from app.models.schemas import PerformanceMetrics
 from app.services.strategy import Portfolio, Side
+from app.services.workspace import get_reports_dir
 
 
 def generate_console_report(metrics: PerformanceMetrics,
@@ -211,9 +211,10 @@ def generate_html_report(metrics: PerformanceMetrics,
 </body>
 </html>"""
 
-    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    reports_dir = get_reports_dir()
+    reports_dir.mkdir(parents=True, exist_ok=True)
     filename = f"report_{backtest_id or 'latest'}.html"
-    filepath = REPORTS_DIR / filename
+    filepath = reports_dir / filename
     filepath.write_text(html, encoding="utf-8")
     return str(filepath)
 

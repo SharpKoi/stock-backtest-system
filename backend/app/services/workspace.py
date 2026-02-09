@@ -38,6 +38,15 @@ def get_indicators_dir() -> Path:
     return get_workspace_dir() / "indicators"
 
 
+def get_reports_dir() -> Path:
+    """Get the reports directory path.
+
+    Returns:
+        Path to ~/.vici-backtest/reports directory.
+    """
+    return get_workspace_dir() / "reports"
+
+
 def ensure_workspace_exists() -> None:
     """Create the workspace directory structure if it doesn't exist.
 
@@ -45,14 +54,17 @@ def ensure_workspace_exists() -> None:
         - ~/.vici-backtest/
         - ~/.vici-backtest/strategies/
         - ~/.vici-backtest/indicators/
+        - ~/.vici-backtest/reports/
     """
     workspace = get_workspace_dir()
     strategies = get_strategies_dir()
     indicators = get_indicators_dir()
+    reports = get_reports_dir()
 
     workspace.mkdir(parents=True, exist_ok=True)
     strategies.mkdir(parents=True, exist_ok=True)
     indicators.mkdir(parents=True, exist_ok=True)
+    reports.mkdir(parents=True, exist_ok=True)
 
     logger.info("Workspace directory ready: %s", workspace)
 
