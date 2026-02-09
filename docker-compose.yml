@@ -1,0 +1,78 @@
+services:
+  # postgres:
+  #   image: postgres:16-alpine
+  #   container_name: vici-backtest-postgres
+  #   environment:
+  #     POSTGRES_DB: vici_db
+  #     POSTGRES_USER: vici_user
+  #     POSTGRES_PASSWORD: devpassword
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   ports:
+  #     - "5432:5432"
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U vici_user -d vici_db"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: vici-backtest-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: vici-backtest-backend
+    environment:
+      # DATABASE_URL: postgresql://vici_user:devpassword@postgres:5432/vici_db
+      DATABASE_TYPE: sqlite
+      REDIS_URL: redis://redis:6379
+      CORS_ORIGINS: '["http://localhost:5173","http://localhost:3000"]'
+    volumes:
+      - ./backend:/app/backend
+      - workspaces:/var/app/workspaces
+      - sqlite_data:/app/data
+    ports:
+      - "8000:8000"
+    depends_on:
+      # postgres:
+      #   condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      target: development
+    container_name: vici-backtest-frontend
+    environment:
+      VITE_API_URL: http://localhost:8000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    command: npm run dev -- --host 0.0.0.0
+
+volumes:
+  postgres_data:
+  workspaces:
+  sqlite_data:
