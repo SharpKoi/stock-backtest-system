@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "vici-trade-sdk"
+version = "0.1.0"
+description = "SDK for building custom trading strategies in the Vici Backtest System"
+authors = ["SharpKoi"]
+readme = "README.md"
+packages = [{include = "vici_trade_sdk"}]
+
+[tool.poetry.dependencies]
+python = "^3.13"
+pandas = "^3.0.0"
+numpy = "^2.2.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^9.0.0"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"

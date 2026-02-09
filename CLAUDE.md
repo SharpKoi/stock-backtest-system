@@ -13,10 +13,10 @@ backend/           Python backend (FastAPI)
   app/
     core/          Config and database setup
     models/        Pydantic schemas
-    services/      Core business logic (data manager, indicators, engine, etc.)
+    services/      Core business logic (data manager, indicators, engine, workspace)
     api/           REST API route handlers
     main.py        FastAPI app entrypoint
-  strategies/      User-defined strategy files (auto-discovered)
+  strategies/      Example strategies (copied to user workspace on first run)
   tests/           Pytest test suite
   data/            SQLite database files (gitignored)
   reports/         Generated HTML reports (gitignored)
@@ -26,9 +26,20 @@ backend/           Python backend (FastAPI)
 
 frontend/          React frontend (Vite + TypeScript)
   src/
-    pages/         Page components (Data, Backtest, Results, ResultDetail)
+    pages/         Page components (Data, Backtest, Results, StrategyEditor, IndicatorEditor)
     services/      API client (axios)
     types/         TypeScript type definitions
+
+vici-trade-sdk/    Standalone SDK package for strategy and indicator development
+  vici_trade_sdk/
+    strategy.py    Strategy base class
+    indicator.py   Indicator base class
+    portfolio.py   Portfolio, Position, Trade, Side classes
+  pyproject.toml   SDK package configuration
+
+~/.vici-backtest/  User workspace (auto-created)
+  strategies/      User-defined strategy files (loaded at runtime)
+  indicators/      User-defined custom indicator files (loaded at runtime)
 ```
 
 ## Development Environment
@@ -67,16 +78,100 @@ Pytest is configured with `asyncio_mode = auto` in `pytest.ini`. Tests use `http
 - **Frontend style:** TypeScript strict mode. Functional components with hooks.
 - **Database:** SQLite stored at `backend/data/backtest.db` (auto-created on startup)
 - **Async:** FastAPI routes are async. Database operations use `aiosqlite`.
-- **Indicators:** Built-in indicators live in `backend/app/services/indicators.py`. Each extends the `Indicator` base class.
-- **Strategies:** User strategies go in `backend/strategies/`. Each file exports a class inheriting `Strategy` with `name`, `indicators()`, and `on_bar()`. Strategies are auto-discovered by the strategy loader.
+- **Indicators:**
+  - Built-in indicators (SMA, EMA, RSI, MACD, Bollinger Bands, ATR, Stochastic, VWAP) live in `backend/app/services/indicators.py`
+  - Custom indicators: Users can create indicators extending the `Indicator` base class from `vici-trade-sdk`
+  - Custom indicators live in `~/.vici-backtest/indicators/` (user workspace)
+  - Backend loads and registers custom indicators on startup
+  - Built-in and custom indicators are merged in unified registry (built-ins take priority)
+  - Web UI provides Indicator Editor for creating/editing indicators inline
+- **Strategies:**
+  - Users install `vici-trade-sdk`: `pip install vici-trade-sdk`
+  - User strategies live in `~/.vici-backtest/strategies/` (user workspace)
+  - Each strategy file imports from `vici_trade_sdk` and defines a class inheriting `Strategy`
+  - Backend copies example strategies from `backend/strategies/` to workspace on first startup
+  - Backend loads strategies from workspace only (not from codebase)
+  - Web UI provides Strategy Editor for creating/editing strategies inline
 
 ## Tech Stack
 
 | Layer     | Technology                          |
 |-----------|-------------------------------------|
 | Backend   | Python 3.13, FastAPI, Pydantic, Poetry |
+| SDK       | vici-trade-sdk (standalone package) |
 | Database  | SQLite (aiosqlite)                  |
 | Data      | yfinance, pandas, numpy             |
 | Charts    | Plotly (HTML reports), Recharts (frontend) |
-| Frontend  | React 19, Vite 7, TypeScript 5.9    |
+| Frontend  | React 19, Vite 7, TypeScript 5.9, Monaco Editor |
 | Testing   | pytest, pytest-asyncio, httpx       |
+
+## Custom Indicator Development Workflow
+
+1. **Installation:** Users run `pip install vici-trade-sdk`
+2. **Writing Indicators:**
+   - Option A: Create `.py` files in `~/.vici-backtest/indicators/`
+   - Option B: Use web UI Indicator Editor (Monaco code editor)
+3. **Indicator Structure:**
+   ```python
+   from vici_trade_sdk import Indicator
+   import pandas as pd
+   import numpy as np
+
+   class WilliamsR(Indicator):
+       def __init__(self, period: int = 14):
+           self.period = period
+
+       @property
+       def name(self) -> str:
+           return f"williams_r_{self.period}"
+
+       def compute(self, df: pd.DataFrame) -> pd.Series:
+           """Compute Williams %R indicator.
+
+           Args:
+               df: DataFrame with OHLCV data (columns: open, high, low, close, volume)
+
+           Returns:
+               Series with indicator values
+           """
+           highest_high = df['high'].rolling(window=self.period).max()
+           lowest_low = df['low'].rolling(window=self.period).min()
+           return -100 * (highest_high - df['close']) / (highest_high - lowest_low)
+   ```
+4. **Backend Loading:** Backend auto-discovers custom indicators from workspace on startup
+5. **Using in Strategies:** Reference custom indicators by name in `indicators()` method:
+   ```python
+   def indicators(self) -> list[dict]:
+       return [
+           {"name": "williams_r_14", "params": {"period": 14}},  # Custom indicator
+           {"name": "sma", "params": {"period": 50}},            # Built-in indicator
+       ]
+   ```
+6. **API Access:** Indicators available via `/api/indicators` endpoint
+
+## Strategy Development Workflow
+
+1. **Installation:** Users run `pip install vici-trade-sdk`
+2. **Writing Strategies:**
+   - Option A: Create `.py` files in `~/.vici-backtest/strategies/`
+   - Option B: Use web UI Strategy Editor (Monaco code editor)
+3. **Strategy Structure:**
+   ```python
+   from vici_trade_sdk import Strategy, Portfolio
+   import pandas as pd
+
+   class MyStrategy(Strategy):
+       @property
+       def name(self) -> str:
+           return "My Custom Strategy"
+
+       def indicators(self) -> list[dict]:
+           return [{"name": "sma", "params": {"period": 50}}]
+
+       def on_bar(self, date: str, data: dict[str, pd.Series],
+                  portfolio: Portfolio) -> None:
+           # Trading logic here
+           pass
+   ```
+4. **Backend Loading:** Backend auto-discovers strategies from workspace on startup
+5. **API Access:** Strategies available via `/api/strategies` endpoint for backtesting

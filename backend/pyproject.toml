@@ -15,6 +15,7 @@ aiosqlite = "0.22.1"
 pydantic = "2.12.5"
 plotly = "6.5.2"
 python-multipart = "0.0.22"
+vici-trade-sdk = {path = "../vici-trade-sdk"}
 
 [tool.poetry.group.dev.dependencies]
 pytest = "9.0.2"

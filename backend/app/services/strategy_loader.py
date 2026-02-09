@@ -10,22 +10,22 @@ import inspect
 import logging
 from pathlib import Path
 
-from app.core.config import STRATEGIES_DIR
 from app.services.strategy import Strategy
+from app.services.workspace import get_strategies_dir
 
 logger = logging.getLogger(__name__)
 
 
 def discover_strategies(directory: Path | None = None) -> dict[str, type[Strategy]]:
-    """Scan a directory for Strategy subclasses and return a registry.
+    """Scan user workspace for Strategy subclasses and return a registry.
 
     Args:
-        directory: Path to scan. Defaults to STRATEGIES_DIR.
+        directory: Path to scan. Defaults to user workspace strategies directory.
 
     Returns:
         Dict mapping strategy class name to the class itself.
     """
-    search_dir = directory or STRATEGIES_DIR
+    search_dir = directory or get_strategies_dir()
     registry: dict[str, type[Strategy]] = {}
 
     if not search_dir.exists():
