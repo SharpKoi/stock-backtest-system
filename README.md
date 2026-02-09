@@ -51,6 +51,50 @@ A comprehensive backtesting platform for US stock trading strategies. Evaluate y
    - Frontend: http://localhost:5173
    - Backend API: http://localhost:8000/docs
 
+## Docker Setup (Recommended for Cloud Development)
+
+Run the entire stack (backend, frontend, PostgreSQL, Redis) with Docker Compose:
+
+### Prerequisites
+- Docker 20.10+
+- Docker Compose 2.0+
+
+### Running with Docker
+
+```bash
+# 1. Create environment file (optional, uses defaults from docker-compose.yml)
+cp .env.example .env
+
+# 2. Start all services
+docker-compose up
+
+# 3. Access the application
+# - Frontend: http://localhost:5173
+# - Backend: http://localhost:8000/docs
+# - PostgreSQL: localhost:5432
+# - Redis: localhost:6379
+
+# 4. Stop all services
+docker-compose down
+
+# 5. Stop and remove volumes (clean state)
+docker-compose down -v
+```
+
+### Services Included
+
+- **Backend**: FastAPI app with hot-reload
+- **Frontend**: Vite dev server with hot-reload
+- **PostgreSQL**: Database for multi-user support (replaces SQLite)
+- **Redis**: Cache and task queue (for future features)
+
+### Development Notes
+
+- Source code is mounted as volumes for hot-reload
+- Database data persists in Docker volume `postgres_data`
+- User workspaces persist in Docker volume `workspaces`
+- All services have health checks for reliability
+
 ## Usage
 
 ### 1. Download Stock Data
