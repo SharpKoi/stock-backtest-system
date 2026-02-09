@@ -13,9 +13,12 @@ pandas = "3.0.0"
 numpy = "2.4.2"
 aiosqlite = "0.22.1"
 pydantic = "2.12.5"
+pydantic-settings = "2.12.0"
 plotly = "6.5.2"
 python-multipart = "0.0.22"
 vici-trade-sdk = {path = "../vici-trade-sdk"}
+psycopg2-binary = "2.9.11"
+redis = "7.1.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "9.0.2"
