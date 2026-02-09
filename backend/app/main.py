@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(application: FastAPI):
     """Application lifespan handler for startup and shutdown."""
-    initialize_database()
+    await initialize_database()
     logger.info("Database initialized")
 
     # Initialize user workspace with example strategies
