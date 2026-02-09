@@ -19,7 +19,6 @@ from app.services.indicator_loader import discover_indicators
 from app.services.indicators import register_custom_indicator
 from app.services.workspace import (
     ensure_indicators_dir_exists,
-    get_indicators_dir,
     initialize_workspace_with_examples,
 )
 

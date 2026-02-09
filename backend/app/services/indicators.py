@@ -16,7 +16,6 @@ import pandas as pd
 # Import Indicator base class from SDK for backward compatibility
 from vici_trade_sdk import Indicator
 
-
 # ── Built-in Indicator Functions ──
 
 def sma(series: pd.Series, period: int) -> pd.Series:

@@ -1,17 +1,15 @@
 """Tests for indicator loading from user workspace."""
 
-import tempfile
-from pathlib import Path
 from textwrap import dedent
 
 import pytest
+from vici_trade_sdk import Indicator
 
 from app.services.indicator_loader import (
     discover_indicators,
     get_indicator_class,
     list_indicator_info,
 )
-from vici_trade_sdk import Indicator
 
 
 @pytest.fixture

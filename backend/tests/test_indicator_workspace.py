@@ -1,7 +1,5 @@
 """Tests for indicator workspace directory management."""
 
-import tempfile
-from pathlib import Path
 
 import pytest
 
