@@ -9,6 +9,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.auth_routes import router as auth_router
 from app.api.backtest_routes import router as backtest_router
 from app.api.data_routes import router as data_router
 from app.api.indicator_routes import router as indicator_router
@@ -65,6 +66,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth_router)
 app.include_router(data_router)
 app.include_router(strategy_router)
 app.include_router(indicator_router)

@@ -39,7 +39,7 @@ class BacktestService:
         self.db = db_session
         self._data_manager = DataManager(db_session)
 
-    async def run_backtest(self, request: BacktestRequest) -> BacktestResultSchema:
+    async def run_backtest(self, request: BacktestRequest, user_id: int | None = None) -> BacktestResultSchema:
         """Execute a complete backtest workflow.
 
         1. Load strategy class
@@ -51,6 +51,7 @@ class BacktestService:
 
         Args:
             request: BacktestRequest with strategy, symbols, dates, etc.
+            user_id: Optional user ID to associate backtest with (for auth)
 
         Returns:
             BacktestResult with metrics, trades, and equity curve.
@@ -92,7 +93,7 @@ class BacktestService:
         metrics = calculate_performance(portfolio)
 
         # 5. Store results in database
-        backtest_id = await self._store_backtest(request, portfolio, metrics)
+        backtest_id = await self._store_backtest(request, portfolio, metrics, user_id)
 
         # 6. Generate reports
         console_report = generate_console_report(
@@ -137,7 +138,7 @@ class BacktestService:
         )
 
     async def _store_backtest(
-        self, request: BacktestRequest, portfolio, metrics: PerformanceMetrics
+        self, request: BacktestRequest, portfolio, metrics: PerformanceMetrics, user_id: int | None = None
     ) -> int:
         """Persist backtest metadata, trades, and results to database.
 
@@ -145,12 +146,14 @@ class BacktestService:
             request: The original backtest request.
             portfolio: The portfolio after backtest completion.
             metrics: Computed performance metrics.
+            user_id: Optional user ID to associate backtest with
 
         Returns:
             The backtest ID.
         """
         # Create backtest record
         backtest = Backtest(
+            user_id=user_id,
             name=request.name,
             strategy_name=request.strategy_name,
             symbols=json.dumps(request.symbols),
@@ -187,21 +190,28 @@ class BacktestService:
         await self.db.flush()
         return backtest.id
 
-    async def get_backtest_result(self, backtest_id: int) -> BacktestResultSchema | None:
+    async def get_backtest_result(self, backtest_id: int, user_id: int | None = None) -> BacktestResultSchema | None:
         """Retrieve a stored backtest result by ID.
 
         Args:
             backtest_id: The backtest ID.
+            user_id: Optional user ID to filter by (ensures user owns the backtest)
 
         Returns:
             BacktestResult if found, None otherwise.
         """
         # Load backtest with relationships
-        result = await self.db.execute(
+        query = (
             select(Backtest)
             .where(Backtest.id == backtest_id)
             .options(selectinload(Backtest.trades), selectinload(Backtest.result))
         )
+
+        # Filter by user_id if provided
+        if user_id is not None:
+            query = query.where(Backtest.user_id == user_id)
+
+        result = await self.db.execute(query)
         backtest = result.scalar_one_or_none()
 
         if not backtest or not backtest.result:
@@ -243,13 +253,22 @@ class BacktestService:
             equity_curve=equity_curve,
         )
 
-    async def list_backtests(self) -> list[BacktestSummary]:
+    async def list_backtests(self, user_id: int | None = None) -> list[BacktestSummary]:
         """List all backtests with summary information.
+
+        Args:
+            user_id: Optional user ID to filter backtests by owner
 
         Returns:
             List of BacktestSummary objects.
         """
-        result = await self.db.execute(select(Backtest).order_by(Backtest.created_at.desc()))
+        query = select(Backtest).order_by(Backtest.created_at.desc())
+
+        # Filter by user_id if provided
+        if user_id is not None:
+            query = query.where(Backtest.user_id == user_id)
+
+        result = await self.db.execute(query)
         backtests = result.scalars().all()
 
         return [
@@ -267,16 +286,23 @@ class BacktestService:
             for bt in backtests
         ]
 
-    async def delete_backtest(self, backtest_id: int) -> bool:
+    async def delete_backtest(self, backtest_id: int, user_id: int | None = None) -> bool:
         """Delete a backtest and its associated data.
 
         Args:
             backtest_id: The backtest ID to delete.
+            user_id: Optional user ID to verify ownership
 
         Returns:
             True if deleted, False if not found.
         """
-        result = await self.db.execute(select(Backtest).where(Backtest.id == backtest_id))
+        query = select(Backtest).where(Backtest.id == backtest_id)
+
+        # Filter by user_id if provided
+        if user_id is not None:
+            query = query.where(Backtest.user_id == user_id)
+
+        result = await self.db.execute(query)
         backtest = result.scalar_one_or_none()
 
         if not backtest:
