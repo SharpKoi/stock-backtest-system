@@ -13,8 +13,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
+    # Compute env file path (backend/app/core/config.py -> project root/.env)
+    _config_file_path: Path = Path(__file__).resolve()
+    _env_file_path: Path = _config_file_path.parent.parent.parent.parent / ".env"
+
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=str(_env_file_path),
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
@@ -23,15 +27,9 @@ class Settings(BaseSettings):
     # Environment
     environment: Literal["local", "development", "staging", "production"] = "local"
 
-    # Project paths
-    project_root: Path = Path(__file__).parent.parent.parent
-
     # Database settings
     database_type: Literal["sqlite", "postgresql"] = "sqlite"
     database_url: str = "sqlite:///./data/backtest.db"
-
-    # For SQLite (local development)
-    sqlite_database_path: Path = project_root / "data" / "backtest.db"
 
     # For PostgreSQL (cloud deployment)
     postgres_host: str = "localhost"
@@ -62,15 +60,37 @@ class Settings(BaseSettings):
         "http://localhost:8080",
     ]
 
-    # Strategy and workspace paths
-    strategies_dir: Path = project_root / "strategies"
-
     # User workspace settings (for local development)
     workspace_dir: Path = Path.home() / ".vici-backtest"
 
     # Cloud storage settings (for cloud deployment)
     s3_bucket: str = ""
     s3_region: str = "us-east-1"
+
+    # JWT authentication settings
+    jwt_secret_key: str  # REQUIRED: Must be set via environment variable
+    jwt_algorithm: str = "HS256"
+    access_token_expire_minutes: int = 1440  # 24 hours
+
+    @property
+    def backend_root(self) -> Path:
+        """Get the backend directory path."""
+        return Path(__file__).resolve().parent.parent.parent
+
+    @property
+    def project_root(self) -> Path:
+        """Get the project root directory path."""
+        return self.backend_root.parent
+
+    @property
+    def sqlite_database_path(self) -> Path:
+        """Get the SQLite database path (absolute)."""
+        return self.backend_root / "data" / "backtest.db"
+
+    @property
+    def strategies_dir(self) -> Path:
+        """Get the strategies directory path."""
+        return self.backend_root / "strategies"
 
     @property
     def database_path(self) -> Path:
@@ -89,7 +109,9 @@ class Settings(BaseSettings):
         """Get the appropriate database URL based on database_type."""
         if self.database_type == "postgresql":
             return self.postgres_database_url
-        return f"sqlite:///{self.sqlite_database_path}"
+        # Ensure absolute path for SQLite
+        abs_path = self.sqlite_database_path.resolve() if not self.sqlite_database_path.is_absolute() else self.sqlite_database_path
+        return f"sqlite:///{abs_path}"
 
 
 # Global settings instance

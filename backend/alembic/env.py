@@ -17,6 +17,9 @@ from app.core.config import settings
 from app.db import Base
 from app.db.session import get_database_url
 
+# Import all models so they're registered with Base.metadata
+from app.models import models  # noqa: F401
+
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config

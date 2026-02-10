@@ -32,6 +32,8 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     container_name: vici-backtest-backend
+    env_file:
+      - .env
     environment:
       # DATABASE_URL: postgresql://vici_user:devpassword@postgres:5432/vici_db
       DATABASE_TYPE: sqlite
