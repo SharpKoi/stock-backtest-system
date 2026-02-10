@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 from app.core.auth import get_current_user
 from app.models.models import User
+from app.services.code_validator import validate_indicator_code
 from app.services.indicator_loader import discover_indicators, list_indicator_info
 from app.services.indicators import (
     BUILTIN_INDICATORS,
@@ -40,6 +41,39 @@ class IndicatorFileRename(BaseModel):
     """Request body for renaming an indicator file."""
 
     new_filename: str
+
+
+class CodeValidationRequest(BaseModel):
+    """Request body for code validation."""
+
+    code: str
+
+
+class CodeValidationResponse(BaseModel):
+    """Response for code validation."""
+
+    is_valid: bool
+    errors: list[str]
+    warnings: list[str]
+
+
+@router.post("/validate", response_model=CodeValidationResponse)
+def validate_indicator(data: CodeValidationRequest, current_user: User = Depends(get_current_user)):
+    """Validate indicator code without saving it.
+
+    Args:
+        data: Code to validate.
+        current_user: Current authenticated user.
+
+    Returns:
+        Validation result with errors and warnings.
+    """
+    result = validate_indicator_code(data.code)
+    return CodeValidationResponse(
+        is_valid=result.is_valid,
+        errors=result.errors,
+        warnings=result.warnings,
+    )
 
 
 @router.get("")
@@ -145,17 +179,35 @@ def create_indicator_file(data: IndicatorFileCreate, current_user: User = Depend
         current_user: Current authenticated user.
 
     Returns:
-        Success message with filename.
+        Success message with filename, validation warnings if any.
 
     Raises:
-        400: If filename or content is invalid.
+        400: If filename, content is invalid, or code validation fails.
     """
     try:
+        # Validate the code first
+        validation_result = validate_indicator_code(data.content)
+        if not validation_result.is_valid:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "message": "Code validation failed",
+                    "errors": validation_result.errors,
+                    "warnings": validation_result.warnings,
+                },
+            )
+
         file_path = write_indicator_file(current_user.id, data.filename, data.content)
-        return {
+        response = {
             "message": "Indicator file saved successfully",
             "filename": file_path.name,
         }
+
+        # Include warnings if any
+        if validation_result.warnings:
+            response["warnings"] = validation_result.warnings
+
+        return response
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -170,18 +222,36 @@ def update_indicator_file(filename: str, data: IndicatorFileCreate, current_user
         current_user: Current authenticated user.
 
     Returns:
-        Success message.
+        Success message with validation warnings if any.
 
     Raises:
-        400: If filename or content is invalid.
+        400: If filename, content is invalid, or code validation fails.
     """
     try:
         # Ensure the filename in path matches the one in body
         if data.filename != filename:
             raise ValueError("Filename mismatch between path and body")
 
+        # Validate the code first
+        validation_result = validate_indicator_code(data.content)
+        if not validation_result.is_valid:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "message": "Code validation failed",
+                    "errors": validation_result.errors,
+                    "warnings": validation_result.warnings,
+                },
+            )
+
         write_indicator_file(current_user.id, filename, data.content)
-        return {"message": "Indicator file updated successfully", "filename": filename}
+        response = {"message": "Indicator file updated successfully", "filename": filename}
+
+        # Include warnings if any
+        if validation_result.warnings:
+            response["warnings"] = validation_result.warnings
+
+        return response
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
