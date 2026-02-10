@@ -39,7 +39,7 @@ class BacktestService:
         self.db = db_session
         self._data_manager = DataManager(db_session)
 
-    async def run_backtest(self, request: BacktestRequest, user_id: int | None = None) -> BacktestResultSchema:
+    async def run_backtest(self, request: BacktestRequest, user_id: int) -> BacktestResultSchema:
         """Execute a complete backtest workflow.
 
         1. Load strategy class
@@ -51,7 +51,7 @@ class BacktestService:
 
         Args:
             request: BacktestRequest with strategy, symbols, dates, etc.
-            user_id: Optional user ID to associate backtest with (for auth)
+            user_id: User ID to associate backtest with and load user's strategies/reports.
 
         Returns:
             BacktestResult with metrics, trades, and equity curve.
@@ -60,7 +60,7 @@ class BacktestService:
             ValueError: If strategy not found or data missing.
         """
         # 1. Load strategy
-        strategy_class = get_strategy_class(request.strategy_name)
+        strategy_class = get_strategy_class(user_id, request.strategy_name)
         if not strategy_class:
             raise ValueError(
                 f"Strategy '{request.strategy_name}' not found. "
@@ -102,7 +102,7 @@ class BacktestService:
         logger.info("\n%s", console_report)
 
         generate_html_report(
-            metrics, portfolio, strategy.name, request.symbols, backtest_id=backtest_id
+            user_id, metrics, portfolio, strategy.name, request.symbols, backtest_id=backtest_id
         )
 
         # 7. Build response
@@ -138,7 +138,7 @@ class BacktestService:
         )
 
     async def _store_backtest(
-        self, request: BacktestRequest, portfolio, metrics: PerformanceMetrics, user_id: int | None = None
+        self, request: BacktestRequest, portfolio, metrics: PerformanceMetrics, user_id: int
     ) -> int:
         """Persist backtest metadata, trades, and results to database.
 
@@ -146,7 +146,7 @@ class BacktestService:
             request: The original backtest request.
             portfolio: The portfolio after backtest completion.
             metrics: Computed performance metrics.
-            user_id: Optional user ID to associate backtest with
+            user_id: User ID to associate backtest with.
 
         Returns:
             The backtest ID.

@@ -17,16 +17,17 @@ from app.services.workspace import get_indicators_dir
 logger = logging.getLogger(__name__)
 
 
-def discover_indicators(directory: Path | None = None) -> dict[str, type[Indicator]]:
+def discover_indicators(user_id: int, directory: Path | None = None) -> dict[str, type[Indicator]]:
     """Scan user workspace for Indicator subclasses and return a registry.
 
     Args:
+        user_id: The user's ID.
         directory: Path to scan. Defaults to user workspace indicators directory.
 
     Returns:
         Dict mapping indicator class name to the class itself.
     """
-    search_dir = directory or get_indicators_dir()
+    search_dir = directory or get_indicators_dir(user_id)
     registry: dict[str, type[Indicator]] = {}
 
     if not search_dir.exists():
@@ -65,31 +66,34 @@ def _load_module_from_file(filepath: Path):
     return module
 
 
-def get_indicator_class(class_name: str,
+def get_indicator_class(user_id: int,
+                        class_name: str,
                         directory: Path | None = None) -> type[Indicator] | None:
     """Look up an indicator class by name.
 
     Args:
+        user_id: The user's ID.
         class_name: The indicator class name (e.g., "WilliamsR").
         directory: Optional directory to search.
 
     Returns:
         The indicator class, or None if not found.
     """
-    registry = discover_indicators(directory)
+    registry = discover_indicators(user_id, directory)
     return registry.get(class_name)
 
 
-def list_indicator_info(directory: Path | None = None) -> list[dict]:
+def list_indicator_info(user_id: int, directory: Path | None = None) -> list[dict]:
     """List all available custom indicators with metadata.
 
     Args:
+        user_id: The user's ID.
         directory: Optional directory to search.
 
     Returns:
         List of dicts with indicator information.
     """
-    registry = discover_indicators(directory)
+    registry = discover_indicators(user_id, directory)
     result = []
 
     for class_name, cls in registry.items():

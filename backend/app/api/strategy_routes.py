@@ -1,8 +1,10 @@
 """API routes for strategy management."""
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from app.core.auth import get_current_user
+from app.models.models import User
 from app.services.strategy_loader import list_strategy_info
 from app.services.workspace import (
     delete_strategy_file,
@@ -36,24 +38,25 @@ class StrategyFileRename(BaseModel):
 
 
 @router.get("")
-def list_strategies():
-    """List all available strategies with metadata."""
-    return list_strategy_info()
+def list_strategies(current_user: User = Depends(get_current_user)):
+    """List all available strategies with metadata for the current user."""
+    return list_strategy_info(current_user.id)
 
 
 @router.get("/files")
-def list_strategy_file_names():
-    """List all strategy file names in the workspace."""
-    files = list_strategy_files()
+def list_strategy_file_names(current_user: User = Depends(get_current_user)):
+    """List all strategy file names in the current user's workspace."""
+    files = list_strategy_files(current_user.id)
     return [{"filename": f.name} for f in files]
 
 
 @router.get("/files/{filename}")
-def get_strategy_file(filename: str):
+def get_strategy_file(filename: str, current_user: User = Depends(get_current_user)):
     """Get the contents of a strategy file.
 
     Args:
         filename: Name of the strategy file.
+        current_user: Current authenticated user.
 
     Returns:
         Strategy file contents.
@@ -63,7 +66,7 @@ def get_strategy_file(filename: str):
         400: If filename is invalid.
     """
     try:
-        content = read_strategy_file(filename)
+        content = read_strategy_file(current_user.id, filename)
         return StrategyFileResponse(filename=filename, content=content)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail=f"Strategy file not found: {filename}")
@@ -72,11 +75,12 @@ def get_strategy_file(filename: str):
 
 
 @router.post("/files")
-def create_strategy_file(data: StrategyFileCreate):
+def create_strategy_file(data: StrategyFileCreate, current_user: User = Depends(get_current_user)):
     """Create or update a strategy file.
 
     Args:
         data: Strategy filename and content.
+        current_user: Current authenticated user.
 
     Returns:
         Success message with filename.
@@ -85,7 +89,7 @@ def create_strategy_file(data: StrategyFileCreate):
         400: If filename or content is invalid.
     """
     try:
-        file_path = write_strategy_file(data.filename, data.content)
+        file_path = write_strategy_file(current_user.id, data.filename, data.content)
         return {
             "message": "Strategy file saved successfully",
             "filename": file_path.name,
@@ -95,12 +99,13 @@ def create_strategy_file(data: StrategyFileCreate):
 
 
 @router.put("/files/{filename}")
-def update_strategy_file(filename: str, data: StrategyFileCreate):
+def update_strategy_file(filename: str, data: StrategyFileCreate, current_user: User = Depends(get_current_user)):
     """Update an existing strategy file.
 
     Args:
         filename: Name of the file to update.
         data: New strategy content.
+        current_user: Current authenticated user.
 
     Returns:
         Success message.
@@ -113,19 +118,20 @@ def update_strategy_file(filename: str, data: StrategyFileCreate):
         if data.filename != filename:
             raise ValueError("Filename mismatch between path and body")
 
-        write_strategy_file(filename, data.content)
+        write_strategy_file(current_user.id, filename, data.content)
         return {"message": "Strategy file updated successfully", "filename": filename}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/files/{filename}/rename")
-def rename_strategy(filename: str, data: StrategyFileRename):
+def rename_strategy(filename: str, data: StrategyFileRename, current_user: User = Depends(get_current_user)):
     """Rename a strategy file.
 
     Args:
         filename: Current name of the strategy file.
         data: New filename.
+        current_user: Current authenticated user.
 
     Returns:
         Success message with old and new filename.
@@ -136,7 +142,7 @@ def rename_strategy(filename: str, data: StrategyFileRename):
         400: If filename is invalid.
     """
     try:
-        new_path = rename_strategy_file(filename, data.new_filename)
+        new_path = rename_strategy_file(current_user.id, filename, data.new_filename)
         return {
             "message": "Strategy file renamed successfully",
             "old_filename": filename,
@@ -151,11 +157,12 @@ def rename_strategy(filename: str, data: StrategyFileRename):
 
 
 @router.delete("/files/{filename}")
-def delete_strategy(filename: str):
+def delete_strategy(filename: str, current_user: User = Depends(get_current_user)):
     """Delete a strategy file.
 
     Args:
         filename: Name of the strategy file to delete.
+        current_user: Current authenticated user.
 
     Returns:
         Success message.
@@ -165,7 +172,7 @@ def delete_strategy(filename: str):
         400: If filename is invalid.
     """
     try:
-        delete_strategy_file(filename)
+        delete_strategy_file(current_user.id, filename)
         return {"message": "Strategy file deleted successfully", "filename": filename}
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail=f"Strategy file not found: {filename}")

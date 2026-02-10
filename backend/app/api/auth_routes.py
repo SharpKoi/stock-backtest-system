@@ -5,9 +5,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import create_access_token, get_current_user, hash_password, verify_password
+from app.core.config import settings
 from app.db import get_db
 from app.models.models import User
 from app.models.schemas import Token, UserCreate, UserLogin, UserResponse
+from app.services.workspace import initialize_user_workspace_with_examples
 
 router = APIRouter(prefix="/api/auth", tags=["authentication"])
 
@@ -46,6 +48,10 @@ async def register(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
     db.add(new_user)
     await db.commit()
     await db.refresh(new_user)
+
+    # Initialize user's workspace with example strategies
+    builtin_strategies_dir = settings.strategies_dir
+    initialize_user_workspace_with_examples(new_user.id, builtin_strategies_dir)
 
     return UserResponse(
         id=new_user.id,

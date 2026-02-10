@@ -1,8 +1,10 @@
 """API routes for indicator management."""
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from app.core.auth import get_current_user
+from app.models.models import User
 from app.services.indicator_loader import discover_indicators, list_indicator_info
 from app.services.indicators import (
     BUILTIN_INDICATORS,
@@ -41,8 +43,11 @@ class IndicatorFileRename(BaseModel):
 
 
 @router.get("")
-def list_indicators():
+def list_indicators(current_user: User = Depends(get_current_user)):
     """List all available indicators (built-in + custom) with metadata.
+
+    Args:
+        current_user: Current authenticated user.
 
     Returns:
         List of indicators with metadata. Built-in indicators have 'type': 'builtin',
@@ -59,7 +64,7 @@ def list_indicators():
         })
 
     # Add custom indicators
-    custom_indicators = list_indicator_info()
+    custom_indicators = list_indicator_info(current_user.id)
     for indicator in custom_indicators:
         result.append({
             "name": indicator["name"],
@@ -72,9 +77,16 @@ def list_indicators():
 
 
 @router.get("/files")
-def list_indicator_file_names():
-    """List all indicator file names in the workspace."""
-    files = list_indicator_files()
+def list_indicator_file_names(current_user: User = Depends(get_current_user)):
+    """List all indicator file names in the current user's workspace.
+
+    Args:
+        current_user: Current authenticated user.
+
+    Returns:
+        List of indicator filenames.
+    """
+    files = list_indicator_files(current_user.id)
     return [{"filename": f.name} for f in files]
 
 
@@ -101,11 +113,12 @@ def get_builtin_indicator_source_endpoint(indicator_name: str):
 
 
 @router.get("/files/{filename}")
-def get_indicator_file(filename: str):
+def get_indicator_file(filename: str, current_user: User = Depends(get_current_user)):
     """Get the contents of an indicator file.
 
     Args:
         filename: Name of the indicator file.
+        current_user: Current authenticated user.
 
     Returns:
         Indicator file contents.
@@ -115,7 +128,7 @@ def get_indicator_file(filename: str):
         400: If filename is invalid.
     """
     try:
-        content = read_indicator_file(filename)
+        content = read_indicator_file(current_user.id, filename)
         return IndicatorFileResponse(filename=filename, content=content)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail=f"Indicator file not found: {filename}")
@@ -124,11 +137,12 @@ def get_indicator_file(filename: str):
 
 
 @router.post("/files")
-def create_indicator_file(data: IndicatorFileCreate):
+def create_indicator_file(data: IndicatorFileCreate, current_user: User = Depends(get_current_user)):
     """Create or update an indicator file.
 
     Args:
         data: Indicator filename and content.
+        current_user: Current authenticated user.
 
     Returns:
         Success message with filename.
@@ -137,7 +151,7 @@ def create_indicator_file(data: IndicatorFileCreate):
         400: If filename or content is invalid.
     """
     try:
-        file_path = write_indicator_file(data.filename, data.content)
+        file_path = write_indicator_file(current_user.id, data.filename, data.content)
         return {
             "message": "Indicator file saved successfully",
             "filename": file_path.name,
@@ -147,12 +161,13 @@ def create_indicator_file(data: IndicatorFileCreate):
 
 
 @router.put("/files/{filename}")
-def update_indicator_file(filename: str, data: IndicatorFileCreate):
+def update_indicator_file(filename: str, data: IndicatorFileCreate, current_user: User = Depends(get_current_user)):
     """Update an existing indicator file.
 
     Args:
         filename: Name of the file to update.
         data: New indicator content.
+        current_user: Current authenticated user.
 
     Returns:
         Success message.
@@ -165,19 +180,20 @@ def update_indicator_file(filename: str, data: IndicatorFileCreate):
         if data.filename != filename:
             raise ValueError("Filename mismatch between path and body")
 
-        write_indicator_file(filename, data.content)
+        write_indicator_file(current_user.id, filename, data.content)
         return {"message": "Indicator file updated successfully", "filename": filename}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/files/{filename}/rename")
-def rename_indicator(filename: str, data: IndicatorFileRename):
+def rename_indicator(filename: str, data: IndicatorFileRename, current_user: User = Depends(get_current_user)):
     """Rename an indicator file.
 
     Args:
         filename: Current name of the indicator file.
         data: New filename.
+        current_user: Current authenticated user.
 
     Returns:
         Success message with old and new filename.
@@ -188,7 +204,7 @@ def rename_indicator(filename: str, data: IndicatorFileRename):
         400: If filename is invalid.
     """
     try:
-        new_path = rename_indicator_file(filename, data.new_filename)
+        new_path = rename_indicator_file(current_user.id, filename, data.new_filename)
         return {
             "message": "Indicator file renamed successfully",
             "old_filename": filename,
@@ -203,11 +219,12 @@ def rename_indicator(filename: str, data: IndicatorFileRename):
 
 
 @router.delete("/files/{filename}")
-def delete_indicator(filename: str):
+def delete_indicator(filename: str, current_user: User = Depends(get_current_user)):
     """Delete an indicator file.
 
     Args:
         filename: Name of the indicator file to delete.
+        current_user: Current authenticated user.
 
     Returns:
         Success message.
@@ -217,7 +234,7 @@ def delete_indicator(filename: str):
         400: If filename is invalid.
     """
     try:
-        delete_indicator_file(filename)
+        delete_indicator_file(current_user.id, filename)
         return {"message": "Indicator file deleted successfully", "filename": filename}
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail=f"Indicator file not found: {filename}")
@@ -226,16 +243,19 @@ def delete_indicator(filename: str):
 
 
 @router.post("/reload")
-def reload_indicators():
-    """Reload custom indicators from workspace (development endpoint).
+def reload_indicators(current_user: User = Depends(get_current_user)):
+    """Reload custom indicators from current user's workspace (development endpoint).
 
-    This endpoint re-scans the indicators directory and updates the registry.
+    This endpoint re-scans the user's indicators directory and updates the registry.
     Useful during development to pick up changes without restarting the server.
+
+    Args:
+        current_user: Current authenticated user.
 
     Returns:
         Success message with count of loaded indicators.
     """
-    custom_indicators = discover_indicators()
+    custom_indicators = discover_indicators(current_user.id)
     for name, cls in custom_indicators.items():
         register_custom_indicator(name, cls)
 
