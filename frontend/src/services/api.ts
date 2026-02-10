@@ -7,12 +7,60 @@ import type {
   OHLCVBar,
   StockInfo,
   StrategyInfo,
+  Token,
+  UserCreate,
+  UserLogin,
+  UserResponse,
 } from "../types";
 
 export const api = axios.create({
   baseURL: "http://localhost:8000/api",
   headers: { "Content-Type": "application/json" },
 });
+
+// Add auth token to all requests
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem("auth_token");
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// Handle 401 Unauthorized responses
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // Clear invalid token and redirect to login
+      localStorage.removeItem("auth_token");
+      if (window.location.pathname !== "/login" && window.location.pathname !== "/register") {
+        window.location.href = "/login";
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
+// ── Authentication ──
+
+export async function registerUser(userData: UserCreate): Promise<UserResponse> {
+  const { data } = await api.post<UserResponse>("/auth/register", userData);
+  return data;
+}
+
+export async function loginUser(credentials: UserLogin): Promise<Token> {
+  const { data } = await api.post<Token>("/auth/login", credentials);
+  return data;
+}
+
+export async function getCurrentUser(): Promise<UserResponse> {
+  const { data } = await api.get<UserResponse>("/auth/me");
+  return data;
+}
 
 // ── Data Management ──
 

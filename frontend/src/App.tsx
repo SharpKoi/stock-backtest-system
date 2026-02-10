@@ -1,4 +1,8 @@
-import { Routes, Route, NavLink } from "react-router-dom";
+import { Routes, Route, NavLink, Navigate } from "react-router-dom";
+import { useAuth } from "./contexts/AuthContext";
+import ProtectedRoute from "./components/ProtectedRoute";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
 import DataPage from "./pages/DataPage";
 import BacktestPage from "./pages/BacktestPage";
 import ResultsPage from "./pages/ResultsPage";
@@ -7,10 +11,32 @@ import StrategyEditorPage from "./pages/StrategyEditorPage";
 import IndicatorEditorPage from "./pages/IndicatorEditorPage";
 
 function App() {
+  const { isAuthenticated, user, logout } = useAuth();
+
+  // Auth-only pages (login/register)
+  if (!isAuthenticated) {
+    return (
+      <div className="app-container auth-layout">
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="*" element={<Navigate to="/login" replace />} />
+        </Routes>
+      </div>
+    );
+  }
+
+  // Protected app pages
   return (
     <div className="app-container">
       <nav className="sidebar">
         <div className="sidebar-brand">Backtest System</div>
+        <div className="sidebar-user">
+          <span className="user-email">{user?.email}</span>
+          <button onClick={logout} className="btn-logout">
+            Logout
+          </button>
+        </div>
         <ul className="sidebar-nav">
           <li>
             <NavLink
@@ -57,12 +83,54 @@ function App() {
       </nav>
       <main className="main-content">
         <Routes>
-          <Route path="/" element={<DataPage />} />
-          <Route path="/strategies" element={<StrategyEditorPage />} />
-          <Route path="/indicators" element={<IndicatorEditorPage />} />
-          <Route path="/backtest" element={<BacktestPage />} />
-          <Route path="/results" element={<ResultsPage />} />
-          <Route path="/results/:id" element={<ResultDetailPage />} />
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <DataPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/strategies"
+            element={
+              <ProtectedRoute>
+                <StrategyEditorPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/indicators"
+            element={
+              <ProtectedRoute>
+                <IndicatorEditorPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/backtest"
+            element={
+              <ProtectedRoute>
+                <BacktestPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/results"
+            element={
+              <ProtectedRoute>
+                <ResultsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/results/:id"
+            element={
+              <ProtectedRoute>
+                <ResultDetailPage />
+              </ProtectedRoute>
+            }
+          />
         </Routes>
       </main>
     </div>
