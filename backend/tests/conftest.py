@@ -73,11 +73,11 @@ def sample_ohlcv():
     close = np.array(prices)
     return pd.DataFrame(
         {
-            "Open": close * (1 + np.random.randn(200) * 0.005),
-            "High": close * (1 + np.abs(np.random.randn(200) * 0.01)),
-            "Low": close * (1 - np.abs(np.random.randn(200) * 0.01)),
-            "Close": close,
-            "Volume": np.random.randint(100000, 2000000, 200),
+            "open": close * (1 + np.random.randn(200) * 0.005),
+            "high": close * (1 + np.abs(np.random.randn(200) * 0.01)),
+            "low": close * (1 - np.abs(np.random.randn(200) * 0.01)),
+            "close": close,
+            "volume": np.random.randint(100000, 2000000, 200),
         },
         index=dates,
     )
