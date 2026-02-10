@@ -11,6 +11,24 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base
 
 
+class User(Base):
+    """User authentication table."""
+
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
+    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, server_default=func.current_timestamp()
+    )
+
+    # Relationships
+    backtests: Mapped[list["Backtest"]] = relationship(
+        "Backtest", back_populates="user", cascade="all, delete-orphan"
+    )
+
+
 class Stock(Base):
     """Stock metadata table."""
 
@@ -63,6 +81,9 @@ class Backtest(Base):
     __tablename__ = "backtests"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True
+    )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     strategy_name: Mapped[str] = mapped_column(String(255), nullable=False)
     symbols: Mapped[str] = mapped_column(Text, nullable=False)  # JSON-encoded list
@@ -76,6 +97,7 @@ class Backtest(Base):
     )
 
     # Relationships
+    user: Mapped["User | None"] = relationship("User", back_populates="backtests")
     trades: Mapped[list["Trade"]] = relationship(
         "Trade", back_populates="backtest", cascade="all, delete-orphan"
     )
