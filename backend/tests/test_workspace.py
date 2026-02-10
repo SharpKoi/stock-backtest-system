@@ -7,21 +7,25 @@ import pytest
 
 from app.services.workspace import (
     delete_strategy_file,
-    ensure_workspace_exists,
+    ensure_user_workspace_exists,
     get_strategies_dir,
-    get_workspace_dir,
-    initialize_workspace_with_examples,
+    get_user_workspace_dir,
+    get_workspace_root,
+    initialize_user_workspace_with_examples,
     list_strategy_files,
     read_strategy_file,
     rename_strategy_file,
     write_strategy_file,
 )
 
+# Test user ID for isolated testing
+TEST_USER_ID = 999
+
 
 @pytest.fixture
 def clean_workspace():
     """Clean up test workspace before and after tests."""
-    workspace = get_workspace_dir()
+    workspace = get_user_workspace_dir(TEST_USER_ID)
     if workspace.exists():
         shutil.rmtree(workspace)
     yield
@@ -31,22 +35,22 @@ def clean_workspace():
 
 def test_get_workspace_dir():
     """Test getting workspace directory path."""
-    workspace = get_workspace_dir()
-    assert workspace == Path.home() / ".vici-backtest"
+    workspace = get_user_workspace_dir(TEST_USER_ID)
+    assert workspace == Path.home() / ".vici-backtest" / "users" / str(TEST_USER_ID)
 
 
 def test_get_strategies_dir():
     """Test getting strategies directory path."""
-    strategies = get_strategies_dir()
-    assert strategies == Path.home() / ".vici-backtest" / "strategies"
+    strategies = get_strategies_dir(TEST_USER_ID)
+    assert strategies == Path.home() / ".vici-backtest" / "users" / str(TEST_USER_ID) / "strategies"
 
 
 def test_ensure_workspace_exists(clean_workspace):
     """Test workspace directory creation."""
-    ensure_workspace_exists()
+    ensure_user_workspace_exists(TEST_USER_ID)
 
-    workspace = get_workspace_dir()
-    strategies = get_strategies_dir()
+    workspace = get_user_workspace_dir(TEST_USER_ID)
+    strategies = get_strategies_dir(TEST_USER_ID)
 
     assert workspace.exists()
     assert workspace.is_dir()
@@ -59,7 +63,7 @@ def test_write_strategy_file(clean_workspace):
     filename = "test_strategy.py"
     content = "# Test strategy"
 
-    path = write_strategy_file(filename, content)
+    path = write_strategy_file(TEST_USER_ID, filename, content)
 
     assert path.exists()
     assert path.name == filename
@@ -68,36 +72,36 @@ def test_write_strategy_file(clean_workspace):
 
 def test_write_strategy_file_creates_workspace(clean_workspace):
     """Test that writing creates workspace if it doesn't exist."""
-    assert not get_workspace_dir().exists()
+    assert not get_user_workspace_dir(TEST_USER_ID).exists()
 
-    write_strategy_file("test.py", "# Test")
+    write_strategy_file(TEST_USER_ID, "test.py", "# Test")
 
-    assert get_workspace_dir().exists()
-    assert get_strategies_dir().exists()
+    assert get_user_workspace_dir(TEST_USER_ID).exists()
+    assert get_strategies_dir(TEST_USER_ID).exists()
 
 
 def test_write_strategy_file_invalid_extension(clean_workspace):
     """Test writing file without .py extension fails."""
     with pytest.raises(ValueError, match="must end with .py"):
-        write_strategy_file("invalid.txt", "content")
+        write_strategy_file(TEST_USER_ID, "invalid.txt", "content")
 
 
 def test_write_strategy_file_path_traversal(clean_workspace):
     """Test that path traversal is blocked."""
     with pytest.raises(ValueError, match="cannot contain path traversal"):
-        write_strategy_file("../evil.py", "content")
+        write_strategy_file(TEST_USER_ID, "../evil.py", "content")
 
     with pytest.raises(ValueError, match="cannot contain path traversal"):
-        write_strategy_file("subdir/file.py", "content")
+        write_strategy_file(TEST_USER_ID, "subdir/file.py", "content")
 
 
 def test_read_strategy_file(clean_workspace):
     """Test reading a strategy file."""
     filename = "read_test.py"
     content = "# Read test content"
-    write_strategy_file(filename, content)
+    write_strategy_file(TEST_USER_ID, filename, content)
 
-    read_content = read_strategy_file(filename)
+    read_content = read_strategy_file(TEST_USER_ID, filename)
 
     assert read_content == content
 
@@ -105,22 +109,22 @@ def test_read_strategy_file(clean_workspace):
 def test_read_nonexistent_file(clean_workspace):
     """Test reading nonexistent file raises error."""
     with pytest.raises(FileNotFoundError, match="Strategy file not found"):
-        read_strategy_file("nonexistent.py")
+        read_strategy_file(TEST_USER_ID, "nonexistent.py")
 
 
 def test_read_strategy_file_path_traversal(clean_workspace):
     """Test that path traversal is blocked for reading."""
     with pytest.raises(ValueError, match="cannot contain path traversal"):
-        read_strategy_file("../evil.py")
+        read_strategy_file(TEST_USER_ID, "../evil.py")
 
 
 def test_list_strategy_files(clean_workspace):
     """Test listing strategy files."""
-    write_strategy_file("strategy1.py", "# Strategy 1")
-    write_strategy_file("strategy2.py", "# Strategy 2")
-    write_strategy_file("_private.py", "# Should be ignored")
+    write_strategy_file(TEST_USER_ID, "strategy1.py", "# Strategy 1")
+    write_strategy_file(TEST_USER_ID, "strategy2.py", "# Strategy 2")
+    write_strategy_file(TEST_USER_ID, "_private.py", "# Should be ignored")
 
-    files = list_strategy_files()
+    files = list_strategy_files(TEST_USER_ID)
 
     assert len(files) == 2
     filenames = [f.name for f in files]
@@ -131,30 +135,30 @@ def test_list_strategy_files(clean_workspace):
 
 def test_list_strategy_files_empty(clean_workspace):
     """Test listing files when directory doesn't exist."""
-    files = list_strategy_files()
+    files = list_strategy_files(TEST_USER_ID)
     assert files == []
 
 
 def test_delete_strategy_file(clean_workspace):
     """Test deleting a strategy file."""
     filename = "delete_test.py"
-    write_strategy_file(filename, "# Delete test")
+    write_strategy_file(TEST_USER_ID, filename, "# Delete test")
 
-    delete_strategy_file(filename)
+    delete_strategy_file(TEST_USER_ID, filename)
 
-    assert not (get_strategies_dir() / filename).exists()
+    assert not (get_strategies_dir(TEST_USER_ID) / filename).exists()
 
 
 def test_delete_nonexistent_file(clean_workspace):
     """Test deleting nonexistent file raises error."""
     with pytest.raises(FileNotFoundError, match="Strategy file not found"):
-        delete_strategy_file("nonexistent.py")
+        delete_strategy_file(TEST_USER_ID, "nonexistent.py")
 
 
 def test_delete_strategy_file_path_traversal(clean_workspace):
     """Test that path traversal is blocked for deletion."""
     with pytest.raises(ValueError, match="cannot contain path traversal"):
-        delete_strategy_file("../evil.py")
+        delete_strategy_file(TEST_USER_ID, "../evil.py")
 
 
 def test_initialize_workspace_with_examples(clean_workspace, tmp_path):
@@ -168,10 +172,10 @@ def test_initialize_workspace_with_examples(clean_workspace, tmp_path):
     (builtin_dir / "_private.py").write_text("# Should not be copied")
 
     # Initialize workspace
-    initialize_workspace_with_examples(builtin_dir)
+    initialize_user_workspace_with_examples(TEST_USER_ID, builtin_dir)
 
     # Check files were copied
-    strategies_dir = get_strategies_dir()
+    strategies_dir = get_strategies_dir(TEST_USER_ID)
     assert (strategies_dir / "example1.py").exists()
     assert (strategies_dir / "example2.py").exists()
     assert not (strategies_dir / "_private.py").exists()
@@ -180,7 +184,7 @@ def test_initialize_workspace_with_examples(clean_workspace, tmp_path):
 def test_initialize_workspace_skips_if_not_empty(clean_workspace, tmp_path):
     """Test that initialization skips if workspace already has strategies."""
     # Create a strategy in workspace
-    write_strategy_file("existing.py", "# Existing")
+    write_strategy_file(TEST_USER_ID, "existing.py", "# Existing")
 
     # Create built-in strategies
     builtin_dir = tmp_path / "builtin_strategies"
@@ -188,10 +192,10 @@ def test_initialize_workspace_skips_if_not_empty(clean_workspace, tmp_path):
     (builtin_dir / "example.py").write_text("# Example")
 
     # Initialize should skip
-    initialize_workspace_with_examples(builtin_dir)
+    initialize_user_workspace_with_examples(TEST_USER_ID, builtin_dir)
 
     # Only the existing file should be there
-    files = list_strategy_files()
+    files = list_strategy_files(TEST_USER_ID)
     assert len(files) == 1
     assert files[0].name == "existing.py"
 
@@ -201,11 +205,11 @@ def test_initialize_workspace_handles_missing_builtin_dir(clean_workspace, tmp_p
     nonexistent_dir = tmp_path / "nonexistent"
 
     # Should not raise, just log warning
-    initialize_workspace_with_examples(nonexistent_dir)
+    initialize_user_workspace_with_examples(TEST_USER_ID, nonexistent_dir)
 
     # Workspace should be created but empty
-    assert get_workspace_dir().exists()
-    assert len(list_strategy_files()) == 0
+    assert get_user_workspace_dir(TEST_USER_ID).exists()
+    assert len(list_strategy_files(TEST_USER_ID)) == 0
 
 
 def test_rename_strategy_file(clean_workspace):
@@ -215,13 +219,13 @@ def test_rename_strategy_file(clean_workspace):
     content = "# Test strategy content"
 
     # Create file
-    write_strategy_file(old_filename, content)
+    write_strategy_file(TEST_USER_ID, old_filename, content)
 
     # Rename
-    new_path = rename_strategy_file(old_filename, new_filename)
+    new_path = rename_strategy_file(TEST_USER_ID, old_filename, new_filename)
 
     # Verify old file is gone and new file exists with same content
-    assert not (get_strategies_dir() / old_filename).exists()
+    assert not (get_strategies_dir(TEST_USER_ID) / old_filename).exists()
     assert new_path.exists()
     assert new_path.name == new_filename
     assert new_path.read_text() == content
@@ -230,41 +234,41 @@ def test_rename_strategy_file(clean_workspace):
 def test_rename_strategy_file_not_found(clean_workspace):
     """Test renaming nonexistent file raises error."""
     with pytest.raises(FileNotFoundError, match="Strategy file not found"):
-        rename_strategy_file("nonexistent.py", "new_name.py")
+        rename_strategy_file(TEST_USER_ID, "nonexistent.py", "new_name.py")
 
 
 def test_rename_strategy_file_already_exists(clean_workspace):
     """Test renaming to existing filename raises error."""
-    write_strategy_file("file1.py", "# File 1")
-    write_strategy_file("file2.py", "# File 2")
+    write_strategy_file(TEST_USER_ID, "file1.py", "# File 1")
+    write_strategy_file(TEST_USER_ID, "file2.py", "# File 2")
 
     with pytest.raises(FileExistsError, match="File already exists"):
-        rename_strategy_file("file1.py", "file2.py")
+        rename_strategy_file(TEST_USER_ID, "file1.py", "file2.py")
 
 
 def test_rename_strategy_file_invalid_extension(clean_workspace):
     """Test renaming to filename without .py extension fails."""
-    write_strategy_file("test.py", "# Test")
+    write_strategy_file(TEST_USER_ID, "test.py", "# Test")
 
     with pytest.raises(ValueError, match="must end with .py"):
-        rename_strategy_file("test.py", "test.txt")
+        rename_strategy_file(TEST_USER_ID, "test.py", "test.txt")
 
 
 def test_rename_strategy_file_path_traversal_old(clean_workspace):
     """Test that path traversal is blocked for old filename."""
     with pytest.raises(ValueError, match="cannot contain path traversal"):
-        rename_strategy_file("../evil.py", "new.py")
+        rename_strategy_file(TEST_USER_ID, "../evil.py", "new.py")
 
     with pytest.raises(ValueError, match="cannot contain path traversal"):
-        rename_strategy_file("subdir/file.py", "new.py")
+        rename_strategy_file(TEST_USER_ID, "subdir/file.py", "new.py")
 
 
 def test_rename_strategy_file_path_traversal_new(clean_workspace):
     """Test that path traversal is blocked for new filename."""
-    write_strategy_file("test.py", "# Test")
+    write_strategy_file(TEST_USER_ID, "test.py", "# Test")
 
     with pytest.raises(ValueError, match="cannot contain path traversal"):
-        rename_strategy_file("test.py", "../evil.py")
+        rename_strategy_file(TEST_USER_ID, "test.py", "../evil.py")
 
     with pytest.raises(ValueError, match="cannot contain path traversal"):
-        rename_strategy_file("test.py", "subdir/file.py")
+        rename_strategy_file(TEST_USER_ID, "test.py", "subdir/file.py")

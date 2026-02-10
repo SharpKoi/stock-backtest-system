@@ -16,16 +16,17 @@ from app.services.workspace import get_strategies_dir
 logger = logging.getLogger(__name__)
 
 
-def discover_strategies(directory: Path | None = None) -> dict[str, type[Strategy]]:
+def discover_strategies(user_id: int, directory: Path | None = None) -> dict[str, type[Strategy]]:
     """Scan user workspace for Strategy subclasses and return a registry.
 
     Args:
+        user_id: The user's ID.
         directory: Path to scan. Defaults to user workspace strategies directory.
 
     Returns:
         Dict mapping strategy class name to the class itself.
     """
-    search_dir = directory or get_strategies_dir()
+    search_dir = directory or get_strategies_dir(user_id)
     registry: dict[str, type[Strategy]] = {}
 
     if not search_dir.exists():
@@ -64,31 +65,34 @@ def _load_module_from_file(filepath: Path):
     return module
 
 
-def get_strategy_class(class_name: str,
+def get_strategy_class(user_id: int,
+                       class_name: str,
                        directory: Path | None = None) -> type[Strategy] | None:
     """Look up a strategy class by name.
 
     Args:
+        user_id: The user's ID.
         class_name: The strategy class name (e.g., "SMACrossover").
         directory: Optional directory to search.
 
     Returns:
         The strategy class, or None if not found.
     """
-    registry = discover_strategies(directory)
+    registry = discover_strategies(user_id, directory)
     return registry.get(class_name)
 
 
-def list_strategy_info(directory: Path | None = None) -> list[dict]:
+def list_strategy_info(user_id: int, directory: Path | None = None) -> list[dict]:
     """List all available strategies with metadata.
 
     Args:
+        user_id: The user's ID.
         directory: Optional directory to search.
 
     Returns:
         List of dicts with strategy information.
     """
-    registry = discover_strategies(directory)
+    registry = discover_strategies(user_id, directory)
     result = []
 
     for class_name, cls in registry.items():

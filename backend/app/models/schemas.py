@@ -1,6 +1,6 @@
 """Pydantic models for request/response validation."""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 
 
 class StockInfo(BaseModel):
@@ -112,3 +112,36 @@ class CSVImportRequest(BaseModel):
 
     symbol: str
     name: str | None = None
+
+
+# Authentication schemas
+class UserCreate(BaseModel):
+    """User registration request."""
+
+    email: EmailStr
+    password: str = Field(min_length=8, description="Password must be at least 8 characters")
+
+
+class UserLogin(BaseModel):
+    """User login request."""
+
+    email: EmailStr
+    password: str
+
+
+class UserResponse(BaseModel):
+    """User information response (no password)."""
+
+    id: int
+    email: str
+    created_at: str
+
+    class Config:
+        from_attributes = True
+
+
+class Token(BaseModel):
+    """JWT token response."""
+
+    access_token: str
+    token_type: str = "bearer"

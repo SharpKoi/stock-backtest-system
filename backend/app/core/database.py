@@ -1,100 +1,103 @@
-"""SQLite database initialization and connection management."""
+"""Database initialization and migration management.
 
-import sqlite3
-from pathlib import Path
-
-from app.core.config import DATABASE_PATH
-
-SCHEMA_SQL = """
-CREATE TABLE IF NOT EXISTS stocks (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    symbol TEXT NOT NULL UNIQUE,
-    name TEXT,
-    exchange TEXT,
-    sector TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS ohlcv (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    stock_id INTEGER NOT NULL,
-    date TEXT NOT NULL,
-    open REAL NOT NULL,
-    high REAL NOT NULL,
-    low REAL NOT NULL,
-    close REAL NOT NULL,
-    volume INTEGER NOT NULL,
-    FOREIGN KEY (stock_id) REFERENCES stocks(id),
-    UNIQUE(stock_id, date)
-);
-
-CREATE INDEX IF NOT EXISTS idx_ohlcv_stock_date ON ohlcv(stock_id, date);
-CREATE INDEX IF NOT EXISTS idx_stocks_symbol ON stocks(symbol);
-
-CREATE TABLE IF NOT EXISTS backtests (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    strategy_name TEXT NOT NULL,
-    symbols TEXT NOT NULL,
-    start_date TEXT NOT NULL,
-    end_date TEXT NOT NULL,
-    initial_capital REAL NOT NULL,
-    commission_rate REAL NOT NULL DEFAULT 0.001,
-    status TEXT NOT NULL DEFAULT 'pending',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS trades (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    backtest_id INTEGER NOT NULL,
-    symbol TEXT NOT NULL,
-    side TEXT NOT NULL,
-    quantity REAL NOT NULL,
-    price REAL NOT NULL,
-    commission REAL NOT NULL DEFAULT 0.0,
-    date TEXT NOT NULL,
-    FOREIGN KEY (backtest_id) REFERENCES backtests(id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_trades_backtest ON trades(backtest_id);
-
-CREATE TABLE IF NOT EXISTS backtest_results (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    backtest_id INTEGER NOT NULL UNIQUE,
-    metrics_json TEXT NOT NULL,
-    equity_curve_json TEXT NOT NULL,
-    FOREIGN KEY (backtest_id) REFERENCES backtests(id)
-);
+This module provides async database initialization using Alembic migrations.
+Replaces the old sync SQLite-only implementation with async support for both
+SQLite and PostgreSQL.
 """
 
+import logging
+from pathlib import Path
 
-def get_connection(db_path: Path | None = None) -> sqlite3.Connection:
-    """Create and return a database connection.
+from alembic import command
+from alembic.config import Config
+from sqlalchemy import text
 
-    Args:
-        db_path: Optional path to database file. Uses default if not provided.
+from app.core.config import settings
+from app.db import engine
+
+logger = logging.getLogger(__name__)
+
+
+async def initialize_database() -> None:
+    """Initialize database by running Alembic migrations.
+
+    This function:
+    1. Ensures the database directory exists (for SQLite)
+    2. Runs Alembic migrations to create/update tables
+    3. For SQLite, enables WAL mode and foreign keys
+
+    For production deployments, you should run migrations separately
+    using `alembic upgrade head` in your deployment pipeline.
+    """
+    import asyncio
+    from concurrent.futures import ThreadPoolExecutor
+
+    # Ensure database directory exists for SQLite
+    if settings.database_type == "sqlite":
+        db_path = settings.sqlite_database_path
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        logger.info(f"SQLite database path: {db_path}")
+
+        # Configure SQLite-specific settings
+        async with engine.begin() as conn:
+            await conn.execute(text("PRAGMA journal_mode=WAL"))
+            await conn.execute(text("PRAGMA foreign_keys=ON"))
+            logger.info("SQLite pragmas configured (WAL mode, foreign keys enabled)")
+
+    # Run Alembic migrations in a thread pool (since Alembic isn't fully async)
+    try:
+
+        def run_migrations():
+            alembic_cfg = get_alembic_config()
+            command.upgrade(alembic_cfg, "head")
+
+        loop = asyncio.get_event_loop()
+        with ThreadPoolExecutor() as pool:
+            await loop.run_in_executor(pool, run_migrations)
+
+        logger.info("Database migrations completed successfully")
+    except Exception as e:
+        logger.error(f"Failed to run database migrations: {e}")
+        # For initial setup, fall back to creating tables directly
+        logger.warning("Attempting to create tables directly using SQLAlchemy...")
+        from app.db import Base
+
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        logger.info("Tables created successfully")
+
+
+def get_alembic_config() -> Config:
+    """Get Alembic configuration.
 
     Returns:
-        A sqlite3 Connection with row_factory set to Row.
+        Alembic Config object pointing to the alembic.ini file.
     """
-    path = db_path or DATABASE_PATH
-    path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(path))
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA foreign_keys=ON")
-    return conn
+    # Path to alembic.ini (should be in backend/ directory)
+    backend_dir = Path(__file__).parent.parent.parent
+    alembic_ini_path = backend_dir / "alembic.ini"
+
+    if not alembic_ini_path.exists():
+        raise FileNotFoundError(
+            f"alembic.ini not found at {alembic_ini_path}. "
+            "Run 'alembic init alembic' to initialize Alembic."
+        )
+
+    alembic_cfg = Config(str(alembic_ini_path))
+    return alembic_cfg
 
 
-def initialize_database(db_path: Path | None = None) -> None:
-    """Create database tables if they do not exist.
+async def check_database_connection() -> bool:
+    """Check if database connection is working.
 
-    Args:
-        db_path: Optional path to database file. Uses default if not provided.
+    Returns:
+        True if connection successful, False otherwise.
     """
-    conn = get_connection(db_path)
     try:
-        conn.executescript(SCHEMA_SQL)
-        conn.commit()
-    finally:
-        conn.close()
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+        logger.info("Database connection successful")
+        return True
+    except Exception as e:
+        logger.error(f"Database connection failed: {e}")
+        return False

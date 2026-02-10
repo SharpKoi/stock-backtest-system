@@ -71,7 +71,8 @@ def generate_console_report(metrics: PerformanceMetrics,
     return "\n".join(lines)
 
 
-def generate_html_report(metrics: PerformanceMetrics,
+def generate_html_report(user_id: int,
+                         metrics: PerformanceMetrics,
                          portfolio: Portfolio,
                          strategy_name: str,
                          symbols: list[str],
@@ -79,6 +80,7 @@ def generate_html_report(metrics: PerformanceMetrics,
     """Generate an HTML report with interactive charts and trade table.
 
     Args:
+        user_id: The user's ID.
         metrics: Computed performance metrics.
         portfolio: Portfolio with equity history and trades.
         strategy_name: Name of the strategy.
@@ -211,7 +213,7 @@ def generate_html_report(metrics: PerformanceMetrics,
 </body>
 </html>"""
 
-    reports_dir = get_reports_dir()
+    reports_dir = get_reports_dir(user_id)
     reports_dir.mkdir(parents=True, exist_ok=True)
     filename = f"report_{backtest_id or 'latest'}.html"
     filepath = reports_dir / filename
