@@ -50,6 +50,8 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 # Copy application code
 COPY --chown=appuser:appuser backend/app /app/app
 COPY --chown=appuser:appuser backend/strategies /app/strategies
+COPY --chown=appuser:appuser backend/alembic /app/alembic
+COPY --chown=appuser:appuser backend/alembic.ini /app/alembic.ini
 
 # Create necessary directories with proper permissions
 RUN mkdir -p /app/data /var/app/workspaces && \
